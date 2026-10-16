@@ -52,7 +52,7 @@ class _Frame:
     text: list[str] | None = None
     text_bytes: int = 0
     has_child: bool = False
-    attrs: Mapping[str, str] = _EMPTY_ATTRS
+    attrs: Mapping[str, str] = field(default_factory=lambda: _EMPTY_ATTRS)
 
 
 @dataclass(slots=True)
