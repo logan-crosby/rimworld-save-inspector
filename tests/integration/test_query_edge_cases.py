@@ -51,8 +51,16 @@ class QueryEdgeCaseTests(unittest.TestCase):
                 if cursor is None:
                     break
             self.assertEqual(union, full_ids, f"limit={limit} pages must be the exact ordered union")
-            self.assertLess(len(json.dumps(responses[0], separators=(",", ":"))),
-                            len(json.dumps(full, separators=(",", ":"))))
+            full_bytes = len(json.dumps(full, separators=(",", ":")))
+            first_bytes = len(json.dumps(responses[0], separators=(",", ":")))
+            if limit < 200:
+                self.assertLess(first_bytes, full_bytes)
+            else:
+                self.assertEqual(responses[0], full,
+                                 "the same limit, filters and snapshot must return the same first page")
+                self.assertEqual(responses[-1]["page"]["returned"], 5)
+                self.assertLess(len(json.dumps(responses[-1], separators=(",", ":"))), full_bytes,
+                                "the five-row continuation must be smaller than the 200-row page")
         empty = service.execute(QueryRequest("pawns", {"scope": "map", "pawn_def": "NoSuchDef"}, limit=1)).as_dict()
         self.assertEqual((empty["page"]["total"], empty["page"]["returned"], empty["page"]["next_cursor"]), (0, 0, None))
 
