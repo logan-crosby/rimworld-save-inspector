@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import math
+import os
 import signal
 import subprocess
 import sys
@@ -17,7 +19,17 @@ from rimworld_save_inspector.schemas import ERROR_SCHEMA, SUCCESS_SCHEMAS
 
 ROOT = Path(__file__).resolve().parents[2]
 SAVE = ROOT / "tests/fixtures/synthetic/seed.rws"
-PYTHON = ROOT / ".venv/bin/python"
+PYTHON = Path(sys.executable)
+
+
+def _orchestration_timeout(seconds: int) -> int:
+    """Scale only process-start/exit waits for explicitly emulated matrix cells."""
+    try:
+        scale = float(os.environ.get("RWSI_TCG_TIMEOUT_SCALE", "1"))
+    except ValueError as exc:
+        raise AssertionError("RWSI_TCG_TIMEOUT_SCALE must be a number") from exc
+    assert math.isfinite(scale) and 1 <= scale <= 10
+    return math.ceil(seconds * scale)
 
 
 def invoke(*args: str) -> subprocess.CompletedProcess[str]:
@@ -346,7 +358,7 @@ def test_cli_broken_pipe_and_interrupt_exit_behavior(monkeypatch, capsys):
     assert process.stdout is not None
     process.stdout.close()
     stderr = process.stderr.read().decode("utf-8") if process.stderr is not None else ""
-    return_code = process.wait(timeout=10)
+    return_code = process.wait(timeout=_orchestration_timeout(10))
     command = [str(PYTHON), "-m", "rimworld_save_inspector.cli", "inspect", str(SAVE), "metadata"]
     assert return_code == 0, f"command={command!r}; stdout=<reader closed>; stderr={stderr!r}"
     assert "BrokenPipe" not in stderr, f"command={command!r}; stdout=<reader closed>; stderr={stderr!r}"
@@ -369,7 +381,7 @@ def test_cli_broken_pipe_and_interrupt_exit_behavior(monkeypatch, capsys):
     assert error_child.stdout is not None
     error_child.stdout.close()
     error_stderr = error_child.stderr.read().decode("utf-8") if error_child.stderr is not None else ""
-    error_return_code = error_child.wait(timeout=10)
+    error_return_code = error_child.wait(timeout=_orchestration_timeout(10))
     assert error_return_code == 2, (
         f"command={error_command!r}; stdout=<reader closed>; stderr={error_stderr!r}"
     )

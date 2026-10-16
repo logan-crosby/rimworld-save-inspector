@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -28,6 +29,20 @@ from rimworld_save_inspector.service import record_id_for_holder
 
 ROOT = Path(__file__).parents[2]
 FIXTURE = Path(__file__).parents[1] / "fixtures/synthetic/seed.rws"
+
+
+def _orchestration_timeout(seconds: int) -> int:
+    """Scale only nested subprocess deadmen for an explicitly emulated guest.
+
+    Cancellation joins, shutdown bounds and product/performance assertions below
+    are intentionally independent of this matrix-only setting.
+    """
+    try:
+        scale = float(os.environ.get("RWSI_TCG_TIMEOUT_SCALE", "1"))
+    except ValueError as exc:
+        raise AssertionError("RWSI_TCG_TIMEOUT_SCALE must be a number") from exc
+    assert math.isfinite(scale) and 1 <= scale <= 10
+    return math.ceil(seconds * scale)
 
 
 def _copy_fixture(tmp_path: Path, name: str = "seed.rws") -> Path:
@@ -169,7 +184,8 @@ def test_service_cli_and_mcp_match_for_all_domains_selectors_and_paging(tmp_path
             cli_args = _cli_args(query_name, filters, limit, cursor)
             cli_args[1] = str(save)
             cli_run = subprocess.run([sys.executable, "-m", "rimworld_save_inspector.cli", *cli_args],
-                                     cwd=ROOT, capture_output=True, text=True, timeout=8)
+                                     cwd=ROOT, capture_output=True, text=True,
+                                     timeout=_orchestration_timeout(8))
             assert cli_run.returncode == 0, (cli_args, cli_run.stdout, cli_run.stderr)
             cli_response = json.loads(cli_run.stdout)
             service_response = service.execute(QueryRequest(query_name, filters, limit=limit, cursor=cursor)).as_dict()
@@ -190,7 +206,8 @@ def test_service_cli_and_mcp_match_for_all_domains_selectors_and_paging(tmp_path
             cli_args = _cli_args("pawns", {"scope": "all_supported"}, 1, next_cursor)
             cli_args[1] = str(save)
             cli_page = subprocess.run([sys.executable, "-m", "rimworld_save_inspector.cli", *cli_args],
-                                      cwd=ROOT, capture_output=True, text=True, timeout=8, check=True)
+                                      cwd=ROOT, capture_output=True, text=True,
+                                      timeout=_orchestration_timeout(8), check=True)
             service_page = service.execute(QueryRequest("pawns", {"scope": "all_supported"}, limit=1, cursor=next_cursor)).as_dict()
             assert _canonical(follow) == _canonical(service_page)
             if _canonical(json.loads(cli_page.stdout)) != _canonical(service_page):
@@ -303,7 +320,8 @@ def test_runtime_io_audit_cli_and_mcp(tmp_path):
         report_paths.append(str(report_path))
         proc = subprocess.run([sys.executable, str(audit_script), "--mode", mode, "--save", str(save),
                                "--report", str(report_path)],
-                              cwd=ROOT, capture_output=True, text=True, timeout=15)
+                              cwd=ROOT, capture_output=True, text=True,
+                              timeout=_orchestration_timeout(15))
         assert proc.returncode == 0, (mode, proc.stdout, proc.stderr)
         marker = next((line.removeprefix("MCP_RUNTIME_IO_AUDIT=") for line in proc.stderr.splitlines()
                        if line.startswith("MCP_RUNTIME_IO_AUDIT=")), None)
@@ -326,7 +344,8 @@ def test_runtime_io_audit_cli_and_mcp(tmp_path):
     assert all(r["source_read_events"] >= 1 for r in reports)
     probe_path = evidence / "probe.json"
     probe = subprocess.run([sys.executable, str(audit_script), "--mode", "probe", "--save", str(save),
-                            "--report", str(probe_path)], cwd=ROOT, capture_output=True, text=True, timeout=8)
+                            "--report", str(probe_path)], cwd=ROOT, capture_output=True, text=True,
+                           timeout=_orchestration_timeout(8))
     assert probe.returncode == 0, (probe.stdout, probe.stderr)
     probe_marker = next(line.removeprefix("MCP_RUNTIME_IO_AUDIT=") for line in probe.stderr.splitlines()
                         if line.startswith("MCP_RUNTIME_IO_AUDIT="))
@@ -356,7 +375,7 @@ def test_runtime_io_audit_observer_detects_blocked_write_and_network_attempt(tmp
     before = hashlib.sha256(save.read_bytes()).hexdigest()
     proc = subprocess.run([sys.executable, str(ROOT / "tools/audit/mcp_runtime_io.py"),
                            "--mode", "probe", "--save", str(save)], cwd=ROOT,
-                          capture_output=True, text=True, timeout=8)
+                          capture_output=True, text=True, timeout=_orchestration_timeout(8))
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     marker = next(line.removeprefix("MCP_RUNTIME_IO_AUDIT=") for line in proc.stderr.splitlines()
                   if line.startswith("MCP_RUNTIME_IO_AUDIT="))
