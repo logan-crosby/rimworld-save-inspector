@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 
 from tools.gates.cases import CASES  # noqa: E402
 from tools.verify import (_artifact, _generic_manifest, _prerequisite_evidence_satisfied,
-                          _review_receipt_errors, now, run_gate, run_g7_gate,
+                          _copy_packaging_report, _review_receipt_errors, now, run_gate, run_g7_gate,
                           validate_evidence, sha256)  # noqa: E402
 
 
@@ -345,6 +345,51 @@ class EvidenceTamperingTests(unittest.TestCase):
             _reseal(run, "FAIL")
             errors = validate_evidence(run)
             self.assertTrue(any("machine-readable packaging report" in error for error in errors))
+
+    def test_packaging_report_marker_accepts_quiet_pytest_progress_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report_dir = root / "evidence" / "packaging-001"
+            report_dir.mkdir(parents=True)
+            payload = report_dir / "artifact.whl"
+            payload.write_bytes(b"synthetic wheel evidence")
+            report = {"artifacts": [{"path": payload.name, "bytes": payload.stat().st_size,
+                                     "sha256": sha256(payload)}], "status": "PASS"}
+            report_path = report_dir / "report.json"
+            report_path.write_text(json.dumps(report))
+            run = root / "G1" / "run-001"
+            run.mkdir(parents=True)
+            stdout = run / "pytest.stdout.txt"
+            stdout.write_text("....PACKAGING_REPORT=evidence/packaging-001/report.json\n")
+
+            with patch("tools.verify.ROOT", root):
+                copied, relative = _copy_packaging_report(run, stdout)
+
+            self.assertEqual(relative, "package-report.json")
+            self.assertEqual(copied["status"], "PASS")
+            copied_artifact = run / copied["artifacts"][0]["path"]
+            self.assertEqual(copied_artifact.read_bytes(), b"synthetic wheel evidence")
+
+    def test_packaging_report_marker_rejects_duplicate_ambiguous_and_escaping_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = root / "G1" / "run-001"
+            run.mkdir(parents=True)
+            stdout = run / "pytest.stdout.txt"
+            bad_logs = (
+                "PACKAGING_REPORT=evidence/one/report.json\nPACKAGING_REPORT=evidence/two/report.json\n",
+                "pytest output PACKAGING_REPORT=evidence/one/report.json\n",
+                "PACKAGING_REPORT=../outside.json\n",
+                "PACKAGING_REPORT=/tmp/outside.json\n",
+            )
+            with patch("tools.verify.ROOT", root):
+                for contents in bad_logs:
+                    with self.subTest(contents=contents):
+                        stdout.write_text(contents)
+                        copied, relative = _copy_packaging_report(run, stdout)
+                        self.assertIsNone(copied)
+                        self.assertIsNone(relative)
+                        self.assertFalse((run / "package-dist").exists())
 
 
 if __name__ == "__main__":
