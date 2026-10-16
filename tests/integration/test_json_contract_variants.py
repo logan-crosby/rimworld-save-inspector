@@ -14,7 +14,7 @@ from jsonschema import Draft202012Validator
 from rimworld_save_inspector.schemas import ERROR_SCHEMA, SUCCESS_SCHEMAS
 
 ROOT = Path(__file__).resolve().parents[2]
-PYTHON = ROOT / ".venv/bin/python"
+PYTHON = Path(sys.executable)
 
 
 class JsonContractVariantTests(unittest.TestCase):
