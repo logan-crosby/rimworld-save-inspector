@@ -7,7 +7,7 @@ import hashlib
 import json
 import math
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Any
 
 from .errors import InspectorError
@@ -66,9 +66,32 @@ class QueryService:
         self.snapshot_lifetime = snapshot_lifetime
         self.indexes = IdentityIndexes(snapshot.records)
         self._records = {r.record_id: r for r in snapshot.records}
+        self._records_by_type: dict[str, list[Record]] = defaultdict(list)
+        self._children: dict[str, list[Record]] = defaultdict(list)
+        for record in snapshot.records:
+            self._records_by_type[record.type_name].append(record)
+            if record.owner_record_id:
+                self._children[record.owner_record_id].append(record)
+        self._player_faction = self.indexes.player_faction(snapshot)
+        self._map_things_present = {
+            record.record_id: any(path.startswith(record.source_path + "/things[") for path in snapshot.collection_states)
+            for record in self._records_by_type["map"]
+        }
+        self._array_globals: list[tuple[str, str]] = []
+        self._metadata_globals: dict[str, tuple[str, Any]] = {}
         self._reference_memberships: dict[str, list[dict[str, Any]]] = {}
         for path, raw in snapshot.globals.items():
-            pool = _world_pool_reference(path)
+            if "/li[" in path and any(marker in path for marker in (
+                "/innerList[", "/modIds[", "/modNames[", "/researchManager[",
+            )):
+                self._array_globals.append((path, str(raw)))
+            leaf = path.rsplit("/", 1)[-1].split("[", 1)[0]
+            if leaf in {"gameVersion", "name", "seedString", "ticksGame", "currentProj"}:
+                normalized_path = re.sub(r"\[\d+\]", "", path)
+                for suffix in ("/gameVersion", "/info/name", "/info/seedString", "/ticksGame", "/currentProj"):
+                    if normalized_path.endswith(suffix):
+                        self._metadata_globals.setdefault(suffix, (path, raw))
+            pool = _world_pool_reference(path) if "/worldPawns[" in path else None
             if pool is not None and isinstance(raw, str) and raw.strip():
                 thing_raw = raw if raw.startswith("Thing_") else "Thing_" + raw
                 reference = self.indexes.resolve(thing_raw, "thing")
@@ -241,7 +264,7 @@ class QueryService:
 
     def _summary(self, filters: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         maps_state = self.snapshot.collection_states.get("/savegame[1]/game[1]/maps[1]", "absent")
-        maps = list(self.snapshot.of_type("map"))
+        maps = list(self._records_by_type["map"])
         map_id = filters.get("map_id")
         normalized = {"map_id": map_id} if map_id is not None else {}
         if map_id is not None:
@@ -254,14 +277,14 @@ class QueryService:
                 raise InspectorError("AMBIGUOUS_MAP", "More than one map has the requested saved ID.", snapshot_id=self.snapshot.snapshot_id)
             maps = matches
         maps.sort(key=lambda m: _ordinal_key(m.source_path))
-        player_ref = self.indexes.player_faction(self.snapshot)
+        player_ref = self._player_faction
         map_summaries = []
         all_pawns: list[Record] = []
         any_unavailable = maps_state != "present"
         for map_record in maps:
-            direct = [p for p in self.snapshot.of_type("pawn") if p.scope == "map" and _map_prefix(map_record.source_path, p.source_path)]
+            direct = [p for p in self._records_by_type["pawn"] if p.scope == "map" and _map_prefix(map_record.source_path, p.source_path)]
             all_pawns.extend(direct)
-            things_state = "present" if any(path.startswith(map_record.source_path + "/things[") for path in self.snapshot.collection_states) else "absent"
+            things_state = "present" if self._map_things_present[map_record.record_id] else "absent"
             if things_state != "present":
                 any_unavailable = True
             parent_raw = _get(map_record, "/mapInfo/parent")
@@ -286,7 +309,7 @@ class QueryService:
         field_status: dict[str, str] = {}
         raw_values: dict[str, str] = {}
         for output_path, suffix in meta_fields.items():
-            path, raw = _global_entry(self.snapshot, suffix)
+            path, raw = self._metadata_entry(suffix)
             status = self.snapshot.global_status.get(path, "absent") if path else "absent"
             value = _coerce_int(raw) if output_path == "/ticks_game" else raw
             if value is None:
@@ -294,8 +317,8 @@ class QueryService:
             if status == "invalid" and raw is not None and output_path == "/ticks_game":
                 raw_values[output_path] = str(raw)
         summary = {"field_status": field_status, "raw_values": raw_values, "derivations": [],
-                   "game_version": self.snapshot.game_version, "world_name": _global(self.snapshot, "/info/name"),
-                   "world_seed": _global(self.snapshot, "/info/seedString"), "ticks_game": _coerce_int(_global(self.snapshot, "/ticksGame")),
+                   "game_version": self.snapshot.game_version, "world_name": self._metadata_entry("/info/name")[1],
+                   "world_seed": self._metadata_entry("/info/seedString")[1], "ticks_game": _coerce_int(self._metadata_entry("/ticksGame")[1]),
                    "player_faction": player_ref.as_dict(), "maps_state": maps_state, "map_count": map_count, "maps": map_summaries,
                    "population": {"direct_map_pawn_records": total, "human_def_records": human, "player_human_records": player_human,
                                   "map_guest_status_counts": _partition(all_pawns, "/guest/guestStatus") if not any_unavailable else None,
@@ -312,10 +335,10 @@ class QueryService:
             raise InspectorError("INVALID_ARGUMENT", "map_id is only valid with scope=map.", snapshot_id=self.snapshot.snapshot_id)
         normal = {"scope": scope}
         normal.update({k: v for k, v in filters.items() if k != "scope"})
-        if filters.get("faction") == "player" and self.indexes.player_faction(self.snapshot).status != "resolved":
+        if filters.get("faction") == "player" and self._player_faction.status != "resolved":
             raise InspectorError("PLAYER_FACTION_UNRESOLVED", "The player faction could not be uniquely resolved.", snapshot_id=self.snapshot.snapshot_id)
         if scope == "map" and filters.get("map_id") is not None:
-            maps = [m for m in self.snapshot.of_type("map") if m.saved_id == filters["map_id"]]
+            maps = [m for m in self._records_by_type["map"] if m.saved_id == filters["map_id"]]
             if not maps:
                 state = self.snapshot.collection_states.get("/savegame[1]/game[1]/maps[1]", "absent")
                 raise InspectorError("FILTER_UNAVAILABLE" if state != "present" else "MAP_NOT_FOUND", "The requested map is unavailable.", snapshot_id=self.snapshot.snapshot_id)
@@ -324,7 +347,7 @@ class QueryService:
             chosen_map = maps[0]
         else:
             chosen_map = None
-        records = list(self.snapshot.of_type("pawn"))
+        records = list(self._records_by_type["pawn"])
         if scope == "map":
             records = [r for r in records if r.scope == "map"]
         elif scope.startswith("world_"):
@@ -344,17 +367,16 @@ class QueryService:
                 else:
                     records = [r for r in records if _get(r, path) == wanted]
         if "faction" in filters:
-            wanted = self.indexes.player_faction(self.snapshot).raw if filters["faction"] == "player" else filters["faction"]
+            wanted = self._player_faction.raw if filters["faction"] == "player" else filters["faction"]
             records = [r for r in records if _get(r, "/faction") == wanted]
         if "name" in filters:
             needle = str(filters["name"]).casefold()
             records = [r for r in records if any(needle in str(_get(r, f"/name/{x}", "/name") or "").casefold() for x in ("first", "nick", "last"))]
         records = _sort_records(records)
         collection_state = self._scope_collection_state(scope, chosen_map)
-        entries = [self._pawn_index(r) for r in records]
         data = {"field_status": {}, "raw_values": {}, "derivations": [], "collection_state": collection_state,
-                "entries": entries}
-        return normal, data, self._coverage(scope, force_partial=collection_state != "present"), data["entries"]
+                "entries": []}
+        return normal, data, self._coverage(scope, force_partial=collection_state != "present"), records
 
     def _scope_collection_state(self, scope: str, map_record: Record | None) -> str:
         if scope == "map":
@@ -375,7 +397,7 @@ class QueryService:
         if pawn is None or pawn.type_name != "pawn":
             raise InspectorError("RECORD_NOT_FOUND", "The requested pawn record was not found.", snapshot_id=self.snapshot.snapshot_id)
         normalized = {"record_id": record_id}
-        children = [r for r in self.snapshot.records if r.owner_record_id == pawn.record_id]
+        children = self._children.get(pawn.record_id, ())
         if name == "pawn":
             section = filters.get("section", "core")
             if section not in {"core", "skills", "traits"}:
@@ -429,7 +451,7 @@ class QueryService:
             items = _source_sort([r for r in children if r.type_name == "item" and r.source_path.startswith(selected_holder_path + "/li[")])
             item_entries = [{"entry_kind": "record", "source_path": r.source_path, "item": self._item(r), "reference": None, "pawn_record_id": None} for r in items]
             reference_entries = []
-            for source_path, raw_reference in _ordered_globals(self.snapshot, selected_holder_path + "/li["):
+            for source_path, raw_reference in self._ordered_globals(selected_holder_path + "/li["):
                 reference = self.indexes.resolve(raw_reference, "thing")
                 target_id = reference.target_record_ids[0] if reference.status == "resolved" else None
                 target = self._records.get(target_id) if target_id else None
@@ -510,7 +532,7 @@ class QueryService:
             return None
         marker_tags = tuple(marker.split("/"))
         return sum(r.type_name == type_name and _contains_tag_sequence(re_tags(r.source_path), marker_tags)
-                   for r in self.snapshot.records if r.owner_record_id == pawn.record_id)
+                   for r in self._children.get(pawn.record_id, ()))
 
     def _item(self, record: Record) -> dict[str, Any]:
         return {**self._record_meta(record), "item_def": _get(record, "/def"), "saved_class": _get(record, "/@Class"),
@@ -525,14 +547,14 @@ class QueryService:
             raise InspectorError("INVALID_ARGUMENT", "section must be progress or techprints.", snapshot_id=self.snapshot.snapshot_id)
         normalized = {"section": section} if name == "research" else {}
         if name == "mods":
-            key_pairs = _ordered_globals(self.snapshot, "/meta[1]/modIds[1]/li[")
-            value_pairs = _ordered_globals(self.snapshot, "/meta[1]/modNames[1]/li[")
+            key_pairs = self._ordered_globals("/meta[1]/modIds[1]/li[")
+            value_pairs = self._ordered_globals("/meta[1]/modNames[1]/li[")
             key_state = _collection_state(self.snapshot, "/meta[1]/modIds[1]")
             value_state = _collection_state(self.snapshot, "/meta[1]/modNames[1]")
         else:
             collection = "progress" if section == "progress" else "techprints"
-            key_pairs = _ordered_globals(self.snapshot, f"/researchManager[1]/{collection}[1]/keys[1]/li[")
-            value_pairs = _ordered_globals(self.snapshot, f"/researchManager[1]/{collection}[1]/values[1]/li[")
+            key_pairs = self._ordered_globals(f"/researchManager[1]/{collection}[1]/keys[1]/li[")
+            value_pairs = self._ordered_globals(f"/researchManager[1]/{collection}[1]/values[1]/li[")
             key_state = _collection_state(self.snapshot, f"{prefix}/{collection}[1]/keys[1]")
             value_state = _collection_state(self.snapshot, f"{prefix}/{collection}[1]/values[1]")
         keys = [v for _, v in key_pairs]
@@ -565,7 +587,7 @@ class QueryService:
                 raise InspectorError("FILTER_UNAVAILABLE", "The research arrays are not positionally aligned.", snapshot_id=self.snapshot.snapshot_id)
             rows = [r for r in rows if r.get("project_def") == filters["project_def"]]
             normalized["project_def"] = filters["project_def"]
-        current = _global(self.snapshot, "/currentProj") if name == "research" else None
+        current = self._metadata_entry("/currentProj")[1] if name == "research" else None
         collection_state = "present" if key_state == value_state == "present" else key_state if key_state != "present" else value_state
         data = {"field_status": {}, "raw_values": {}, "derivations": [], "alignment": alignment,
                 "collection_state": collection_state, "entries": rows}
@@ -578,12 +600,20 @@ class QueryService:
                          "name_count": len(vals) if value_state == "present" else None})
         return normalized, data, self._coverage("all_supported", force_partial=alignment == "unpaired" or collection_state != "present"), rows
 
-    def _page(self, query: QueryRequest, filters: dict[str, Any], data: dict[str, Any], rows: list[dict[str, Any]], limit: int) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _metadata_entry(self, suffix: str) -> tuple[str | None, Any]:
+        return self._metadata_globals.get(re.sub(r"\[\d+\]", "", suffix), (None, None))
+
+    def _ordered_globals(self, marker: str) -> list[tuple[str, str]]:
+        return sorted((pair for pair in self._array_globals if marker in pair[0]), key=lambda pair: _ordinal_key(pair[0]))
+
+    def _page(self, query: QueryRequest, filters: dict[str, Any], data: dict[str, Any], rows: list[dict[str, Any]] | list[Record], limit: int) -> tuple[dict[str, Any], dict[str, Any]]:
         offset = self._cursor_offset(query.cursor, query.name, filters, limit) if query.cursor else 0
         if offset > len(rows):
             raise InspectorError("INVALID_CURSOR", "The cursor offset is outside the result set.", snapshot_id=self.snapshot.snapshot_id)
         end = min(offset + limit, len(rows))
         selected = rows[offset:end]
+        if query.name == "pawns":
+            selected = [self._pawn_index(record) for record in selected]
         page_data = {**data, "entries": selected}
         next_cursor = self._make_cursor(query.name, filters, limit, end) if end < len(rows) else None
         result_page = {"total": len(rows), "returned": len(selected), "next_cursor": next_cursor}

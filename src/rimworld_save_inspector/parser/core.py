@@ -6,7 +6,8 @@ import threading
 import time
 import math
 from dataclasses import dataclass, field
-from typing import Any, BinaryIO
+from types import MappingProxyType
+from typing import Any, BinaryIO, Mapping
 from xml.sax.handler import ContentHandler, feature_external_ges, feature_external_pes
 
 from ..errors import InspectorError
@@ -39,17 +40,19 @@ _EXPECTED_FIELDS = {
     "world_object": ("/ID", "/id", "/def", "/name", "/label", "/nameInt"),
 }
 _REFERENCE_LEAVES = {"faction", "hostFaction", "slaveFaction", "sourceGene", "suppressedBy", "pawn", "overriddenByGene", "parent"}
+_COLLECTION_NAMES = {"maps", "things", "pawnsAlive", "pawnsDead", "pawnsMothballed", "pawnsForcefullyKeptAsWorldPawns", "skills", "allTraits", "hediffs", "endogenes", "xenogenes", "equipment", "wornApparel", "inventory", "innerList", "progress", "techprints", "modIds", "modNames", "keys", "values"}
+_EMPTY_ATTRS: Mapping[str, str] = MappingProxyType({})
 
 
 @dataclass(slots=True)
 class _Frame:
     tag: str
     path: str
-    counts: dict[str, int] = field(default_factory=dict)
-    text: list[str] = field(default_factory=list)
+    counts: dict[str, int] | None = None
+    text: list[str] | None = None
     text_bytes: int = 0
     has_child: bool = False
-    attrs: dict[str, str] = field(default_factory=dict)
+    attrs: Mapping[str, str] = _EMPTY_ATTRS
 
 
 @dataclass(slots=True)
@@ -99,30 +102,43 @@ class _Handler(ContentHandler):
         self._retained_bytes = 0
         self.root_seen = False
         self.game_seen = False
+        self._check_count = 0
 
-    def _check(self) -> None:
+    def _check(self, *, force_deadline: bool = False) -> None:
         if self.cancel is not None and self.cancel.is_set():
             raise InspectorError("CANCELLED", "Snapshot loading was cancelled.")
-        if time.monotonic() - self.started > self.limits.deadline_seconds:
+        self._check_count += 1
+        # Cancellation stays event-granular; the deadline is sampled at most
+        # 64 callbacks apart and again at EOF. BoundedReader checks every read.
+        if (force_deadline or self._check_count & 63 == 0) and time.monotonic() - self.started > self.limits.deadline_seconds:
             raise InspectorError("LIMIT_EXCEEDED", "The parse wall deadline was exceeded.", {"limit": "deadline_seconds"})
 
     def _path(self, tag: str) -> str:
         parent = self.frames[-1] if self.frames else None
         if parent is None:
             return f"/{tag}[1]"
+        if parent.counts is None:
+            parent.counts = {}
         parent.counts[tag] = parent.counts.get(tag, 0) + 1
         parent.has_child = True
-        parent.text.clear()
+        if parent.text is not None:
+            parent.text.clear()
         return f"{parent.path}/{tag}[{parent.counts[tag]}]"
 
     def _tags(self) -> tuple[str, ...]:
         return tuple(frame.tag for frame in self.frames)
 
-    def _candidate(self, tag: str, attrs: dict[str, str], path: str) -> tuple[str, str | None]:
+    def _candidate(self, tag: str, cls: str | None) -> tuple[str, str | None]:
         # startElement has already pushed this element on the path stack.
+        if tag not in {"li", "thing"} and cls != "Pawn":
+            return "", None
+        if tag == "li" and cls != "Pawn" and len(self.frames) > 1 and self.frames[-2].tag not in {
+            "maps", "allFactions", "worldObjects", "pawnsAlive", "pawnsDead", "pawnsMothballed",
+            "innerList", "hediffs", "endogenes", "xenogenes", "skills", "allTraits",
+        }:
+            return "", None
         tags = self._tags()
         tail = "/".join(tags[-9:])
-        cls = attrs.get("Class")
         if tail.endswith("game/maps/li"):
             return "map", None
         if tail.endswith("game/world/factionManager/allFactions/li"):
@@ -158,7 +174,11 @@ class _Handler(ContentHandler):
         if len(self.frames) + 1 > self.limits.nesting_depth:
             raise InspectorError("LIMIT_EXCEEDED", "The XML nesting depth limit was exceeded.", {"limit": "nesting_depth"})
         path = self._path(name)
-        frame = _Frame(name, path, attrs={k: str(attrs.get(k)) for k in ("IsNull", "Class") if attrs.get(k) is not None})
+        is_null = attrs.get("IsNull")
+        cls = attrs.get("Class")
+        frame_attrs = ({key: str(value) for key, value in (("IsNull", is_null), ("Class", cls)) if value is not None}
+                       if is_null is not None or cls is not None else _EMPTY_ATTRS)
+        frame = _Frame(name, path, attrs=frame_attrs)
         self.frames.append(frame)
         if not self.root_seen:
             self.root_seen = True
@@ -166,7 +186,6 @@ class _Handler(ContentHandler):
                 raise InspectorError("UNSUPPORTED_FORMAT", "The XML root is not an unnamespaced savegame element.")
         if name == "game" and self.frames[0].tag == "savegame":
             self.game_seen = True
-        cls = attrs.get("Class") if "Class" in attrs else None
         if cls is not None:
             class_bytes = len(str(cls).encode("utf-8"))
             if class_bytes > self.limits.extension_value_bytes:
@@ -176,18 +195,15 @@ class _Handler(ContentHandler):
                 self._retained_bytes += class_bytes
                 if self._retained_bytes > self.limits.retained_value_bytes:
                     raise InspectorError("LIMIT_EXCEEDED", "The normalized value byte limit was exceeded.", {"limit": "retained_value_bytes"})
-        tags = self._tags()
-        if tags[-4:] == ("maps", "li", "things", "thing"):
+        if (name == "thing" and len(self.frames) >= 4 and self.frames[-2].tag == "things"
+                and self.frames[-3].tag == "li" and self.frames[-4].tag == "maps"):
             map_builder = next((b for b in reversed(self.builders) if b.type_name == "map"), None)
             if map_builder:
                 map_builder.direct_thing_count += 1
                 if cls == "Pawn":
                     map_builder.direct_pawn_count += 1
-        if cls:
-            # Only the class selector is retained from XML attributes.
-            frame.text.clear()
-        self._mark_collections(path, attrs)
-        kind, scope = self._candidate(name, {"Class": cls} if cls else {}, path)
+        self._mark_collections(path, is_null)
+        kind, scope = self._candidate(name, cls)
         if kind:
             parent_pawn = next((b for b in reversed(self.builders) if b.type_name == "pawn"), None)
             builder = _Builder(kind, path, {"Class": cls} if cls else {}, len(self.frames), owner_id=parent_pawn.record_id if parent_pawn else None, scope=scope)
@@ -208,11 +224,10 @@ class _Handler(ContentHandler):
                 return self.frames[index].path
         return None
 
-    def _mark_collections(self, path: str, attrs: Any) -> None:
-        collection_names = {"maps", "things", "pawnsAlive", "pawnsDead", "pawnsMothballed", "pawnsForcefullyKeptAsWorldPawns", "skills", "allTraits", "hediffs", "endogenes", "xenogenes", "equipment", "wornApparel", "inventory", "innerList", "progress", "techprints", "modIds", "modNames", "keys", "values"}
+    def _mark_collections(self, path: str, is_null: str | None) -> None:
         tag = self.frames[-1].tag
-        if tag in collection_names:
-            self.collections[path] = "explicit_null" if attrs.get("IsNull") == "True" else "present"
+        if tag in _COLLECTION_NAMES:
+            self.collections[path] = "explicit_null" if is_null == "True" else "present"
 
     def characters(self, content: str) -> None:
         self._check()
@@ -225,7 +240,8 @@ class _Handler(ContentHandler):
         if not self.builders:
             frame.text_bytes += size
             if frame.text_bytes > self.limits.extension_value_bytes:
-                frame.text.clear()
+                if frame.text is not None:
+                    frame.text.clear()
                 if frame.text_bytes <= self.limits.extension_value_bytes + size:
                     self._diagnostic("EXTENSION_OMITTED", path=frame.path)
                 frame.text_bytes = self.limits.extension_value_bytes + 1
@@ -233,6 +249,8 @@ class _Handler(ContentHandler):
             self._retained_bytes += size
             if self._retained_bytes > self.limits.retained_value_bytes:
                 raise InspectorError("LIMIT_EXCEEDED", "The normalized value byte limit was exceeded.", {"limit": "retained_value_bytes"})
+            if frame.text is None:
+                frame.text = []
             frame.text.append(content)
             return
         builder = self.builders[-1]
@@ -242,6 +260,8 @@ class _Handler(ContentHandler):
         self._retained_bytes += size
         if self._retained_bytes > self.limits.retained_value_bytes:
             raise InspectorError("LIMIT_EXCEEDED", "The normalized value byte limit was exceeded.", {"limit": "retained_value_bytes"})
+        if frame.text is None:
+            frame.text = []
         frame.text.append(content)
         frame.text_bytes += size
 
@@ -250,7 +270,7 @@ class _Handler(ContentHandler):
         frame = self.frames[-1]
         if frame.tag != name:
             raise InspectorError("MALFORMED_XML", "The XML element stack is inconsistent.")
-        text = "".join(frame.text).strip()
+        text = "".join(frame.text or ()).strip()
         if self.builders and text:
             builder = self.builders[-1]
             relative = self._relative_path(builder.path, frame.path)
@@ -434,6 +454,7 @@ class _Handler(ContentHandler):
             self.diagnostics.append(Diagnostic(code, "warning", code.replace("_", " ").lower(), path, details=details))
 
     def close(self) -> ParsedSave:
+        self._check(force_deadline=True)
         if not self.root_seen or not self.game_seen:
             raise InspectorError("UNSUPPORTED_FORMAT", "The savegame root must contain a game element.")
         game_version = next((v for p, v in self.globals.items() if p.endswith("/gameVersion[1]")), None)
