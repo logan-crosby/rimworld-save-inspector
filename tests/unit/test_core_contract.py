@@ -1,9 +1,13 @@
 import hashlib
+import io
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from rimworld_save_inspector.models import Record, Snapshot, QueryRequest, record_id_for_path
+from rimworld_save_inspector.models import ParseLimits, Record, Snapshot, QueryRequest, record_id_for_path
+from rimworld_save_inspector.parser.core import parse_stream
 from rimworld_save_inspector.service import QueryService
 from rimworld_save_inspector.source import load_snapshot
 from rimworld_save_inspector.indexes import IdentityIndexes
@@ -24,6 +28,31 @@ class IdentityContractTests(unittest.TestCase):
 
 
 class SummaryContractTests(unittest.TestCase):
+    def test_summary_metadata_and_parallel_arrays_preserve_source_matching_and_order(self):
+        snapshot = Snapshot(
+            "sha256:" + "a" * 64, "interpretation:" + "b" * 64, 1, "tiny.rws", "1.6.1",
+            "rimworld-1.6/v1", "0.1.0", (),
+            globals={
+                "/savegame[1]/game[1]/other[1]/name[1]": "unrelated",
+                "/savegame[1]/game[1]/world[1]/info[1]/name[3]": "first matching world",
+                "/savegame[1]/game[1]/world[1]/info[1]/name[1]": "later matching world",
+                "/savegame[1]/meta[1]/modIds[1]/li[2]": "second.id",
+                "/savegame[1]/meta[1]/modIds[1]/li[1]": "first.id",
+                "/savegame[1]/meta[1]/modNames[1]/li[2]": "Second",
+                "/savegame[1]/meta[1]/modNames[1]/li[1]": "First",
+            },
+            collection_states={
+                "/savegame[1]/meta[1]/modIds[1]": "present",
+                "/savegame[1]/meta[1]/modNames[1]": "present",
+            },
+        )
+        service = QueryService(snapshot)
+        self.assertEqual(service.execute(QueryRequest("summary")).data["world_name"], "first matching world")
+        self.assertEqual(
+            [(entry["package_id"], entry["display_name"]) for entry in service.execute(QueryRequest("mods")).data["entries"]],
+            [("first.id", "First"), ("second.id", "Second")],
+        )
+
     def test_summary_uses_saved_direct_thing_and_pawn_counts(self):
         map_path = "/savegame[1]/game[1]/maps[1]/li[1]"
         map_record = Record(
@@ -147,6 +176,49 @@ class SummaryContractTests(unittest.TestCase):
 
 
 class ReferenceAndPagingTests(unittest.TestCase):
+    def test_pawn_first_page_materializes_only_returned_rows(self):
+        pawns = tuple(
+            Record(record_id=record_id_for_path("pawn", path), type_name="pawn", saved_id=f"Pawn_{index}",
+                   source_path=path, values={"/def": "Human"}, scope="map")
+            for index in range(100)
+            for path in (f"/savegame[1]/game[1]/maps[1]/li[1]/things[1]/thing[{index + 1}]",)
+        )
+        snapshot = Snapshot("sha256:" + "a" * 64, "interpretation:" + "b" * 64, 1, "many.rws", "1.6.1",
+                            "rimworld-1.6/v1", "0.1.0", pawns,
+                            collection_states={
+                                "/savegame[1]/game[1]/maps[1]": "present",
+                                "/savegame[1]/game[1]/maps[1]/li[1]/things[1]": "present",
+                            })
+        service = QueryService(snapshot)
+        with patch.object(service, "_pawn_index", wraps=service._pawn_index) as materialize:
+            result = service.execute(QueryRequest("pawns", {"scope": "map"}, limit=1))
+        self.assertEqual(result.page["total"], 100)
+        self.assertEqual(len(result.data["entries"]), 1)
+        self.assertEqual(materialize.call_count, 1)
+
+    def test_deadline_is_checked_at_eof_for_short_documents(self):
+        class SlowReader(io.BytesIO):
+            def read(self, size=-1):
+                time.sleep(0.01)
+                return super().read(size)
+
+        with self.assertRaises(InspectorError) as caught:
+            parse_stream(SlowReader(b"<savegame><game/></savegame>"), limits=ParseLimits(deadline_seconds=0.001))
+        self.assertEqual(caught.exception.code, "LIMIT_EXCEEDED")
+
+    def test_candidate_fast_path_keeps_classed_non_li_held_pawns(self):
+        xml = b"""<savegame><game><maps><li><things>
+        <thing Class='Pawn'><id>Parent</id><def>Human</def><inventory><pawns>
+        <other Class='Pawn'><id>Child</id><def>Human</def></other>
+        </pawns></inventory></thing></things></li></maps>
+        <unrelated><li><id>Ignored</id><def>Human</def></li></unrelated>
+        </game></savegame>"""
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = _load_xml(directory, "candidate-fast-path.rws", xml)
+        pawns = [record for record in snapshot.records if record.type_name == "pawn"]
+        self.assertEqual([record.saved_id for record in pawns], ["Parent", "Child"])
+        self.assertEqual(pawns[1].owner_record_id, pawns[0].record_id)
+
     def test_direct_map_corpse_adapter_is_internal_and_excludes_nested_held_corpses(self):
         xml = b"""<savegame><game><maps><li><uniqueID>0</uniqueID><things>
         <thing Class='Pawn'><id>Human1</id><def>Human</def></thing>
