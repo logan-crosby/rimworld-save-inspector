@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import hashlib
 from pathlib import Path
 import shutil
 import sys
@@ -25,7 +26,15 @@ def pytest_runtest_makereport(item, call):
     destination.mkdir(parents=True, exist_ok=False)
     tmp_path = item.funcargs.get("tmp_path")
     if tmp_path is not None and Path(tmp_path).exists():
-        shutil.copytree(tmp_path, destination / "synthetic-tmp", dirs_exist_ok=True)
+        omitted = []
+        for path in Path(tmp_path).rglob("*"):
+            if path.is_file() and path.suffix.lower() in {".rws", ".xml"}:
+                omitted.append({"path": str(path.relative_to(tmp_path)), "bytes": path.stat().st_size,
+                                "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+        shutil.copytree(tmp_path, destination / "synthetic-tmp", dirs_exist_ok=True,
+                        ignore=lambda directory, names: [name for name in names
+                            if Path(name).suffix.lower() in {".rws", ".xml"}], symlinks=True)
+        (destination / "omitted-save-inputs.json").write_text(json.dumps(omitted, indent=2) + "\n", encoding="utf-8")
     capture = "\n".join(f"===== {name} =====\n{content}" for name, content in report.sections)
     details = {
         "nodeid": item.nodeid,

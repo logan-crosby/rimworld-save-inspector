@@ -290,6 +290,7 @@ def test_cancellation_during_parser_normalization_reaps_worker(tmp_path, monkeyp
 
 def test_runtime_io_audit_cli_and_mcp(tmp_path):
     save = _copy_fixture(tmp_path)
+    save.chmod(0o444)
     audit_script = ROOT / "tools/audit/mcp_runtime_io.py"
     before = hashlib.sha256(save.read_bytes()).hexdigest()
     mode_before = save.stat().st_mode
@@ -312,10 +313,13 @@ def test_runtime_io_audit_cli_and_mcp(tmp_path):
         assert report["report_path"] == str(report_path)
         assert json.loads(report_path.read_text(encoding="utf-8")) == report
         assert report["queries_completed"] >= 1
+        assert report["runtime_package"]["file"]
+        assert report["runtime_package"]["version"]
         assert report["writes_under_save_root"] == []
         assert report["network_attempts"] == []
         assert report["source_hash_before"] == report["source_hash_after"] == before
         assert report["mode_before"] == report["mode_after"] == mode_before
+        assert report["mode_before"] & 0o222 == 0, "T20 requires a read-only disposable source"
         assert "Traceback" not in proc.stderr
     assert hashlib.sha256(save.read_bytes()).hexdigest() == before
     assert save.stat().st_mode == mode_before
