@@ -58,11 +58,15 @@ def load_snapshot(source: Path, *, limits: ParseLimits | None = None, cancel: th
     """Read one explicitly named regular file without writing or searching for saves."""
     limits = limits or ParseLimits()
     try:
-        source_path = Path(source)
+        raw_source = os.fspath(source)
     except TypeError as exc:
         raise InspectorError("INVALID_ARGUMENT", "A local filesystem path is required.") from exc
-    if "://" in os.fspath(source_path):
+    if isinstance(raw_source, str) and _has_url_scheme(raw_source):
         raise InspectorError("UNSUPPORTED_SOURCE", "Only local regular files are supported.")
+    try:
+        source_path = Path(raw_source)
+    except TypeError as exc:
+        raise InspectorError("INVALID_ARGUMENT", "A local filesystem path is required.") from exc
     try:
         resolved = source_path.resolve(strict=True)
         before_path = resolved.stat()
@@ -141,3 +145,10 @@ def load_snapshot(source: Path, *, limits: ParseLimits | None = None, cancel: th
         raise
     except PermissionError as exc:
         raise InspectorError("SOURCE_UNREADABLE", "The configured save could not be read.") from exc
+
+
+def _has_url_scheme(value: str) -> bool:
+    """Recognize a URL before pathlib normalizes repeated slashes."""
+    scheme, separator, _ = value.partition("://")
+    return bool(separator and scheme and scheme[0].isalpha()
+                and all(character.isalnum() or character in "+.-" for character in scheme))

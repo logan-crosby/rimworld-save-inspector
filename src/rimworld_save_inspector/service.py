@@ -12,7 +12,7 @@ from typing import Any
 
 from .errors import InspectorError
 from .indexes import IdentityIndexes, memberships_for
-from .models import QueryRequest, QueryResponse, Record, Snapshot, record_id_for_path, thaw
+from .models import Diagnostic, QueryRequest, QueryResponse, Record, Snapshot, record_id_for_path, thaw
 
 _ARRAY_QUERIES = {"pawns", "health", "genes", "equipment", "inventory", "research", "mods"}
 _SCOPES = {"map", "world_alive", "world_dead", "world_mothballed", "held", "all_supported"}
@@ -73,8 +73,8 @@ class QueryService:
             if record.owner_record_id:
                 self._children[record.owner_record_id].append(record)
         self._player_faction = self.indexes.player_faction(snapshot)
-        self._map_things_present = {
-            record.record_id: any(path.startswith(record.source_path + "/things[") for path in snapshot.collection_states)
+        self._map_things_state = {
+            record.record_id: _collection_state(snapshot, record.source_path + "/things[1]")
             for record in self._records_by_type["map"]
         }
         self._array_globals: list[tuple[str, str]] = []
@@ -216,11 +216,21 @@ class QueryService:
                 "domain_availability": domains}
 
     def _coverage(self, scope: str, *, force_partial: bool = False) -> dict[str, Any]:
-        diagnostics = [d for d in self.snapshot.diagnostics]
+        pawn_candidate_affects_scope = scope in {"map", "all_supported"}
+        diagnostics = [d for d in self.snapshot.diagnostics
+                       if d.code != "UNSUPPORTED_PAWN_CANDIDATE" or pawn_candidate_affects_scope]
         counts = dict(self.snapshot.diagnostic_counts)
+        if not pawn_candidate_affects_scope:
+            counts.pop("UNSUPPORTED_PAWN_CANDIDATE", None)
         for cycle in self.indexes.reference_cycles:
             cycle_records = [self._records.get(record_id) for record_id in cycle]
-            if any(record is not None and (scope in {"all_supported", "held"} or record.scope == scope) for record in cycle_records):
+            if any(record is not None and (
+                scope in {"all_supported", "held"}
+                or record.scope == scope
+                or record.owner_record_id is not None
+                and (owner := self._records.get(record.owner_record_id)) is not None
+                and owner.scope == scope
+            ) for record in cycle_records):
                 counts["REFERENCE_CYCLE"] = counts.get("REFERENCE_CYCLE", 0) + 1
                 record = next((r for r in cycle_records if r is not None), None)
                 diagnostics.append(Diagnostic("REFERENCE_CYCLE", "warning", "gene override cycle", record.source_path if record else None,
@@ -281,10 +291,18 @@ class QueryService:
         map_summaries = []
         all_pawns: list[Record] = []
         any_unavailable = maps_state != "present"
+        any_unknown_map_pawn = False
         for map_record in maps:
             direct = [p for p in self._records_by_type["pawn"] if p.scope == "map" and _map_prefix(map_record.source_path, p.source_path)]
             all_pawns.extend(direct)
-            things_state = "present" if self._map_things_present[map_record.record_id] else "absent"
+            unknown_map_pawn = any(
+                diagnostic.code == "UNSUPPORTED_PAWN_CANDIDATE"
+                and diagnostic.source_path is not None
+                and _map_prefix(map_record.source_path, diagnostic.source_path)
+                for diagnostic in self.snapshot.diagnostics
+            )
+            any_unknown_map_pawn |= unknown_map_pawn
+            things_state = self._map_things_state[map_record.record_id]
             if things_state != "present":
                 any_unavailable = True
             parent_raw = _get(map_record, "/mapInfo/parent")
@@ -295,16 +313,17 @@ class QueryService:
                                   "parent_def": _get(parent, "/def"), "size_raw": _get(map_record, "/mapInfo/size"),
                                   "things_state": things_state,
                                   "direct_thing_count": _get(map_record, "/direct_thing_count") if things_state == "present" else None,
-                                  "direct_pawn_count": _get(map_record, "/direct_pawn_count", default=len(direct)) if things_state == "present" else None})
+                                  "direct_pawn_count": (_get(map_record, "/direct_pawn_count", default=len(direct))
+                                                         if things_state == "present" and not unknown_map_pawn else None)})
         if maps_state != "present":
             map_count = None
             map_summaries = []
         else:
             map_count = len(maps)
-        total = None if any_unavailable else len(all_pawns)
-        human = None if any_unavailable else sum(_get(p, "/def") == "Human" for p in all_pawns)
+        total = None if any_unavailable or any_unknown_map_pawn else len(all_pawns)
+        human = None if any_unavailable or any_unknown_map_pawn else sum(_get(p, "/def") == "Human" for p in all_pawns)
         player_human_set = [p for p in all_pawns if _get(p, "/def") == "Human" and _get(p, "/faction") == player_ref.raw]
-        player_human = None if any_unavailable or player_ref.status != "resolved" else len(player_human_set)
+        player_human = None if any_unavailable or any_unknown_map_pawn or player_ref.status != "resolved" else len(player_human_set)
         meta_fields = {"/game_version": "/gameVersion[1]", "/world_name": "/info/name[1]", "/world_seed": "/info/seedString[1]", "/ticks_game": "/ticksGame[1]"}
         field_status: dict[str, str] = {}
         raw_values: dict[str, str] = {}
@@ -446,8 +465,15 @@ class QueryService:
             token = holder if name == "equipment" else "inventory"
             if selected_holder_path is None:
                 selected_holder_path = _root_holder_path(pawn, token)
-            state = (str(self.snapshot.collection_states.get(selected_holder_path, "absent")) if name == "inventory" and holder is not None
-                     else self._child_collection_state(pawn, "equipment/equipment/innerList" if holder == "equipment" else "apparel/wornApparel/innerList" if holder == "apparel" else "inventory/innerContainer/innerList"))
+            if name == "inventory" and holder is not None:
+                state = str(self.snapshot.collection_states.get(selected_holder_path, "absent"))
+            elif name == "inventory":
+                outer_state = self._child_collection_state(pawn, "inventory")
+                state = (outer_state if outer_state != "present"
+                         else self._child_collection_state(pawn, "inventory/innerContainer/innerList"))
+            else:
+                state = self._child_collection_state(
+                    pawn, "equipment/equipment/innerList" if holder == "equipment" else "apparel/wornApparel/innerList")
             items = _source_sort([r for r in children if r.type_name == "item" and r.source_path.startswith(selected_holder_path + "/li[")])
             item_entries = [{"entry_kind": "record", "source_path": r.source_path, "item": self._item(r), "reference": None, "pawn_record_id": None} for r in items]
             reference_entries = []
