@@ -140,6 +140,8 @@ def load_snapshot(source: Path, *, limits: ParseLimits | None = None, cancel: th
             diagnostics=parsed.diagnostics,
             diagnostic_counts=parsed.diagnostic_counts,
             auxiliary_records=parsed.auxiliary_records,
+            direct_map_candidate_count=parsed.direct_map_candidate_count,
+            direct_map_candidate_map_paths=parsed.direct_map_candidate_map_paths,
         )
     except InspectorError:
         raise

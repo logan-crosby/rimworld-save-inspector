@@ -82,6 +82,8 @@ class ParsedSave:
     game_version: str | None
     profile_version: str = PARSER_PROFILE
     auxiliary_records: tuple[Record, ...] = ()
+    direct_map_candidate_count: int = 0
+    direct_map_candidate_map_paths: tuple[str, ...] = ()
 
 
 class _Handler(ContentHandler):
@@ -99,7 +101,12 @@ class _Handler(ContentHandler):
         self.collections: dict[str, str] = {}
         self.diagnostics: list[Diagnostic] = []
         self.diagnostic_counts: dict[str, int] = {}
+        self.direct_map_candidate_count = 0
+        self.direct_map_candidate_map_paths: set[str] = set()
         self._unsupported_holder_paths: set[str] = set()
+        self._holder_modes: dict[str, str] = {}
+        self._holder_entries: set[str] = set()
+        self._holder_full_entries: set[str] = set()
         self._retained_bytes = 0
         self.root_seen = False
         self.game_seen = False
@@ -129,8 +136,35 @@ class _Handler(ContentHandler):
     def _tags(self) -> tuple[str, ...]:
         return tuple(frame.tag for frame in self.frames)
 
+    def _known_holder_list(self) -> bool:
+        tags = self._tags()
+        if len(tags) < 4 or tags[-2] != "innerList":
+            return False
+        parent = tags[-3]
+        if parent == "equipment" and tags[-4] == "equipment":
+            return any(builder.type_name == "pawn" for builder in self.builders)
+        if parent == "wornApparel" and tags[-4] == "apparel":
+            return any(builder.type_name == "pawn" for builder in self.builders)
+        if parent == "pawns":
+            return "worldObjects" in tags and any(builder.type_name == "world_object" for builder in self.builders)
+        if parent != "innerContainer":
+            return False
+        container_owner = tags[-4]
+        if container_owner == "inventory":
+            return any(builder.type_name == "pawn" for builder in self.builders)
+        if container_owner == "li":
+            return any(builder.type_name == "item" and builder.path == self.frames[-4].path
+                       for builder in self.builders)
+        if container_owner == "thing":
+            return "things" in tags and "maps" in tags
+        if container_owner == "shipThing":
+            return "transportShipManager" in tags
+        return False
+
     def _candidate(self, tag: str, cls: str | None) -> tuple[str, str | None]:
         # startElement has already pushed this element on the path stack.
+        if self.builders and self.builders[-1].type_name == "unsupported":
+            return "", None
         if tag not in {"li", "thing"} and cls != "Pawn":
             return "", None
         if tag == "li" and cls != "Pawn" and len(self.frames) > 1 and self.frames[-2].tag not in {
@@ -151,14 +185,16 @@ class _Handler(ContentHandler):
         map_pawn = tail.endswith("maps/li/things/thing")
         pool = _world_pool_for_tags(tags)
         world_pool_pawn = pool is not None
-        known_holder_pawn = any(x in tags for x in ("equipment", "wornApparel", "inventory", "innerContainer", "pawns"))
+        known_holder_pawn = (tag == "li" and self._known_holder_list()
+                             or tag not in {"li", "thing"} and any(marker in tags for marker in ("inventory", "equipment", "apparel"))
+                             and any(builder.type_name == "pawn" for builder in self.builders))
         if cls == "Pawn" and (map_pawn or world_pool_pawn or known_holder_pawn):
             if map_pawn:
                 return "pawn", "map"
             return "pawn", f"world_{pool}" if pool else "held"
         if world_pool_pawn and tag == "li" and cls is None:
             return "pawn", f"world_{pool}"
-        if cls not in {"Pawn", "Corpse"} and tail.endswith("innerList/li"):
+        if cls not in {"Pawn", "Corpse"} and tail.endswith("innerList/li") and self._known_holder_list():
             return "item", "held"
         if tag == "li" and tail.endswith("hediffs/li"):
             return "hediff", "held"
@@ -181,6 +217,8 @@ class _Handler(ContentHandler):
                        if is_null is not None or cls is not None else _EMPTY_ATTRS)
         frame = _Frame(name, path, attrs=frame_attrs)
         self.frames.append(frame)
+        if name == "li" and len(self.frames) >= 3 and self.frames[-2].tag == "innerList" and self.frames[-3].tag == "innerContainer":
+            self._holder_entries.add(self.frames[-3].path)
         if not self.root_seen:
             self.root_seen = True
             if name != "savegame":
@@ -210,11 +248,16 @@ class _Handler(ContentHandler):
                 self._diagnostic("UNSUPPORTED_PAWN_CANDIDATE", path=path, detail=cls)
         self._mark_collections(path, is_null)
         kind, scope = self._candidate(name, cls)
-        if not kind and name == "li" and cls == "Pawn":
+        if not kind and name == "li" and cls == "Pawn" and not (
+            self.builders and self.builders[-1].type_name == "unsupported"
+        ):
             # Class-tagged pawn-shaped records outside a profile-recognized
             # source remain unsupported, but must not disappear silently.
             self._diagnostic("UNSUPPORTED_PAWN_CANDIDATE", path=path, detail=cls)
             parent = self.frames[-2] if len(self.frames) >= 2 else None
+            if parent is not None and parent.tag == "innerList" and parent.path not in self._unsupported_holder_paths:
+                self._unsupported_holder_paths.add(parent.path)
+                self._diagnostic("UNSUPPORTED_HOLDER", path=parent.path)
             in_record_container = any(frame.tag in {"thing", "shipThing", "worldObject"} for frame in self.frames[:-1])
             recognized_parent = parent is not None and parent.tag in {
                 "maps", "allFactions", "worldObjects", "pawnsAlive", "pawnsDead", "pawnsMothballed",
@@ -224,6 +267,9 @@ class _Handler(ContentHandler):
             if in_record_container and parent is not None and not recognized_parent and parent.path not in self._unsupported_holder_paths:
                 self._unsupported_holder_paths.add(parent.path)
                 self._diagnostic("UNSUPPORTED_HOLDER", path=parent.path)
+            # Keep parsing every byte and enforcing the per-record budget,
+            # but do not attach child genes/items to an unrelated ancestor.
+            self.builders.append(_Builder("unsupported", path, {}, len(self.frames)))
         if kind:
             parent_pawn = next((b for b in reversed(self.builders) if b.type_name == "pawn"), None)
             builder = _Builder(kind, path, {"Class": cls} if cls else {}, len(self.frames), owner_id=parent_pawn.record_id if parent_pawn else None, scope=scope)
@@ -232,7 +278,7 @@ class _Handler(ContentHandler):
                 map_builder = next((b for b in reversed(self.builders) if b.type_name == "map"), None)
                 if map_builder:
                     builder.memberships.append({"scope": "map", "map_id": None, "map_record_id": map_builder.record_id, "source_path": path})
-            if parent_pawn and kind != "pawn":
+            if kind in {"item", "pawn"} and scope == "held":
                 holder_path = self._holder_path()
                 if holder_path:
                     builder.memberships.append({"scope": "held", "holder_id": record_id_for_path("holder", holder_path), "source_path": path})
@@ -240,7 +286,7 @@ class _Handler(ContentHandler):
 
     def _holder_path(self) -> str | None:
         for index in range(len(self.frames) - 1, -1, -1):
-            if self.frames[index].tag in {"equipment", "wornApparel", "inventory", "innerContainer", "innerList", "pawns"}:
+            if self.frames[index].tag == "innerList":
                 return self.frames[index].path
         return None
 
@@ -280,6 +326,8 @@ class _Handler(ContentHandler):
         self._retained_bytes += size
         if self._retained_bytes > self.limits.retained_value_bytes:
             raise InspectorError("LIMIT_EXCEEDED", "The normalized value byte limit was exceeded.", {"limit": "retained_value_bytes"})
+        if builder.type_name == "unsupported":
+            return
         if frame.text is None:
             frame.text = []
         frame.text.append(content)
@@ -291,7 +339,9 @@ class _Handler(ContentHandler):
         if frame.tag != name:
             raise InspectorError("MALFORMED_XML", "The XML element stack is inconsistent.")
         text = "".join(frame.text or ()).strip()
-        if self.builders and text:
+        if name == "contentsLookMode" and len(self.frames) >= 2 and self.frames[-2].tag == "innerContainer":
+            self._holder_modes[self.frames[-2].path] = text
+        if self.builders and self.builders[-1].type_name != "unsupported" and text:
             builder = self.builders[-1]
             relative = self._relative_path(builder.path, frame.path)
             is_null = frame.attrs.get("IsNull") == "True"
@@ -303,7 +353,7 @@ class _Handler(ContentHandler):
                 builder.values.setdefault(relative, []).append((text, frame.path))
             if builder.type_name == "corpse" and frame.tag == "li":
                 self.globals[frame.path] = text
-        elif self.builders and not frame.has_child and frame.tag in _SCALARS:
+        elif self.builders and self.builders[-1].type_name != "unsupported" and not frame.has_child and frame.tag in _SCALARS:
             builder = self.builders[-1]
             relative = self._relative_path(builder.path, frame.path)
             builder.values.setdefault(relative + (":explicit_null" if frame.attrs.get("IsNull") == "True" else ":empty"), []).append(("", frame.path))
@@ -343,11 +393,28 @@ class _Handler(ContentHandler):
                     self.globals[frame.path] = ""
         if self.builders and self.builders[-1].path == frame.path:
             builder = self.builders.pop()
-            record = self._finish(builder)
+            record = self._finish(builder) if builder.type_name != "unsupported" else None
             if record is not None:
                 (self.auxiliary_records if record.type_name == "corpse" else self.records).append(record)
+                if record.type_name in {"item", "pawn"} and "/innerContainer[" in record.source_path:
+                    holder_path = record.source_path.rsplit("/innerList[", 1)[0]
+                    if holder_path != record.source_path:
+                        self._holder_full_entries.add(holder_path)
             if len(self.records) + len(self.auxiliary_records) > self.limits.normalized_records:
                 raise InspectorError("LIMIT_EXCEEDED", "The normalized record limit was exceeded.", {"limit": "normalized_records"})
+        if name == "innerContainer" and frame.path not in self._holder_modes:
+            if frame.path in self._holder_entries:
+                self._diagnostic("INFERRED_HOLDER_MODE", path=frame.path,
+                                 detail="Deep" if frame.path in self._holder_full_entries else "Reference")
+        elif name == "innerContainer" and self._holder_modes.get(frame.path) == "Reference":
+            # The look mode is authoritative even when serialized after the
+            # list. A structured entry in this holder is a reference source,
+            # never another full definition of the same saved identity.
+            list_path = frame.path + "/innerList[1]"
+            while self.records and self.records[-1].source_path.startswith(list_path + "/li["):
+                record = self.records.pop()
+                if record.source_path.rsplit("/li[", 1)[0] == list_path and record.saved_id:
+                    self.globals[record.source_path] = "Thing_" + record.saved_id.removeprefix("Thing_")
         self.frames.pop()
 
     @staticmethod
@@ -417,6 +484,8 @@ class _Handler(ContentHandler):
             text = values.get("/text")
             if isinstance(text, str) and text:
                 self.globals[builder.path] = text
+            elif isinstance(values.get("/id"), str) and values["/id"]:
+                self.globals[builder.path] = "Thing_" + values["/id"].removeprefix("Thing_")
             elif "/@Class" in values:
                 self._diagnostic("UNSUPPORTED_HOLDER", path=builder.path)
             return None
@@ -462,6 +531,9 @@ class _Handler(ContentHandler):
 
     def _diagnostic(self, code: str, *, path: str, detail: str | None = None) -> None:
         self.diagnostic_counts[code] = self.diagnostic_counts.get(code, 0) + 1
+        if code == "UNSUPPORTED_PAWN_CANDIDATE" and self._tags()[-4:] == ("maps", "li", "things", "thing"):
+            self.direct_map_candidate_count += 1
+            self.direct_map_candidate_map_paths.add(self.frames[-3].path)
         if sum(1 for d in self.diagnostics if d.code == code) < self.limits.diagnostic_examples_per_code:
             details = {}
             if detail is not None:
@@ -490,7 +562,7 @@ class _Handler(ContentHandler):
         for (kind, saved_id), count in seen.items():
             if count > 1:
                 self._diagnostic("DUPLICATE_SAVED_ID", path="/savegame[1]" )
-        return ParsedSave(tuple(self.records), dict(self.globals), dict(self.global_status), dict(self.collections), tuple(sorted(self.diagnostics, key=lambda d: (d.code, d.source_path or ""))), dict(self.diagnostic_counts), game_version, auxiliary_records=tuple(self.auxiliary_records))
+        return ParsedSave(tuple(self.records), dict(self.globals), dict(self.global_status), dict(self.collections), tuple(sorted(self.diagnostics, key=lambda d: (d.code, d.source_path or ""))), dict(self.diagnostic_counts), game_version, auxiliary_records=tuple(self.auxiliary_records), direct_map_candidate_count=self.direct_map_candidate_count, direct_map_candidate_map_paths=tuple(sorted(self.direct_map_candidate_map_paths)))
 
 
 def _world_pool_for_tags(tags: tuple[str, ...]) -> str | None:

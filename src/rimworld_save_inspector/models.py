@@ -128,6 +128,8 @@ class Snapshot:
     diagnostics: tuple[Diagnostic, ...] = ()
     diagnostic_counts: Mapping[str, int] = field(default_factory=dict)
     auxiliary_records: tuple[Record, ...] = ()
+    direct_map_candidate_count: int = 0
+    direct_map_candidate_map_paths: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "records", tuple(self.records))
