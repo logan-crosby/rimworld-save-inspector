@@ -91,8 +91,12 @@ def main() -> int:
     started = time.monotonic()
     exit_code = 0
     error = None
+    runtime_package = None
     try:
-        sys.path.insert(0, str(ROOT / "src"))
+        if args.mode != "probe":
+            import rimworld_save_inspector
+            runtime_package = {"file": str(Path(rimworld_save_inspector.__file__).resolve()),
+                               "version": rimworld_save_inspector.__version__}
         if args.mode == "probe":
             try:
                 with save.open("ab"):
@@ -143,6 +147,7 @@ def main() -> int:
         "command": command,
         "python": sys.version,
         "platform": platform.platform(),
+        "runtime_package": runtime_package,
         "report_path": str(args.report.resolve(strict=False)) if args.report is not None else None,
         "source_path": str(save),
         "source_hash_before": before_hash,
