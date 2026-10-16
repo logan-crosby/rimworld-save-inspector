@@ -46,6 +46,7 @@ def _parser() -> argparse.ArgumentParser:
     inspect.add_argument("--name")
     inspect.add_argument("--guest-status")
     inspect.add_argument("--section")
+    inspect.add_argument("--project-def")
     inspect.add_argument("--group")
     inspect.add_argument("--holder")
     inspect.add_argument("--holder-id")
@@ -58,7 +59,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _filters(args: argparse.Namespace) -> dict[str, Any]:
-    names = ("scope", "map_id", "faction", "pawn_def", "name", "guest_status", "section", "group", "holder", "holder_id")
+    names = ("scope", "map_id", "faction", "pawn_def", "name", "guest_status", "section", "project_def", "group", "holder", "holder_id")
     filters = {name: getattr(args, name) for name in names if getattr(args, name, None) is not None}
     if getattr(args, "estimate_missing_as_one", False):
         filters["estimate_missing_as_one"] = True
