@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<savegame>
+  <meta>
+    <gameVersion>1.6.4871 rev591</gameVersion>
+    <modIds><li>ludeon.rimworld</li><li>example.synthetic</li></modIds>
+    <modNames><li>Core</li><li>Synthetic Fixture</li></modNames>
+  </meta>
+  <game>
+    <tickManager><ticksGame>120000</ticksGame></tickManager>
+    <scenario><playerFaction><factionDef>PlayerColony</factionDef></playerFaction></scenario>
+    <world>
+      <info><name>SyntheticWorld</name><seedString>fixture</seedString></info>
+      <factionManager><allFactions><li><def>PlayerColony</def><loadID>7</loadID><name>Test Colony</name></li></allFactions></factionManager>
+      <worldObjects><worldObjects><li Class="Settlement"><ID>9</ID><def>Settlement</def><name>Test Landing</name></li></worldObjects></worldObjects>
+      <worldPawns>
+        <pawnsAlive />
+        <pawnsDead><li Class="Pawn"><id>Human2</id><def>Human</def><name><first>Past</first><nick>Past</nick><last>Pawn</last></name><faction>Faction_7</faction></li></pawnsDead>
+        <pawnsMothballed />
+        <pawnsForcefullyKeptAsWorldPawns><li>Thing_Human2</li></pawnsForcefullyKeptAsWorldPawns>
+      </worldPawns>
+    </world>
+    <maps><li>
+      <uniqueID>0</uniqueID><mapInfo><parent>WorldObject_9</parent><size>(10, 1, 10)</size></mapInfo>
+      <things>
+        <thing Class="Pawn">
+          <id>Human1</id><def>Human</def><kindDef>Colonist</kindDef>
+          <name><first>Alex</first><nick>Lex</nick><last>Example</last></name>
+          <faction>Faction_7</faction><gender>Female</gender>
+          <ageTracker><ageBiologicalTicks>72000000</ageBiologicalTicks></ageTracker>
+          <guest><hostFaction>null</hostFaction><slaveFaction>null</slaveFaction></guest>
+          <skills><skills><li><def>Shooting</def><level>4</level><passion>Minor</passion><xpSinceLastLevel>15.5</xpSinceLastLevel></li></skills></skills>
+          <story><traits><allTraits><li><def>Tough</def><degree>1</degree><sourceGene>null</sourceGene><suppressedBy>null</suppressedBy></li></allTraits></traits></story>
+          <healthTracker><hediffSet><hediffs><li Class="Hediff_Injury"><loadID>10</loadID><def>Cut</def><severity>0.25</severity><visible>True</visible><part><body>Human</body><index>3</index></part></li></hediffs></hediffSet></healthTracker>
+          <genes>
+            <endogenes>
+              <li><def>GeneA</def><loadID>1</loadID><pawn>Thing_Human1</pawn><overriddenByGene>Gene_2</overriddenByGene></li>
+              <li><def>GeneB</def><loadID>2</loadID><pawn>Thing_Human1</pawn><overriddenByGene>null</overriddenByGene></li>
+            </endogenes>
+            <xenogenes /><xenotype>Baseliner</xenotype><hybrid>False</hybrid>
+          </genes>
+          <equipment><equipment><innerList><li><id>Rifle1</id><def>Rifle</def><quality>Normal</quality><health>100</health></li></innerList></equipment></equipment>
+          <apparel><wornApparel><innerList><li><id>Hat1</id><def>Hat</def><stuff>Cloth</stuff><quality>Good</quality><health>40</health><stackCount>1</stackCount></li></innerList></wornApparel></apparel>
+          <inventory><innerContainer><innerList>
+            <li><id>Medicine1</id><def>Medicine</def><stackCount>2</stackCount></li>
+            <li><id>Food1</id><def>Food</def></li>
+          </innerList></innerContainer></inventory>
+        </thing>
+        <thing Class="Corpse"><id>Corpse1</id><def>Corpse_Human</def><innerContainer><contentsLookMode>Reference</contentsLookMode><innerList><li>Thing_Human2</li></innerList></innerContainer></thing>
+      </things>
+    </li></maps>
+    <researchManager>
+      <currentProj>SolarPower</currentProj>
+      <progress><keys><li>SolarPower</li><li>Microelectronics</li></keys><values><li>25.5</li><li>0</li></values></progress>
+      <techprints><keys><li>Microelectronics</li></keys><values><li>1</li></values></techprints>
+    </researchManager>
+  </game>
+</savegame>
