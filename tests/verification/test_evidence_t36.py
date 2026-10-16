@@ -8,6 +8,7 @@ the assertion targets semantic checks as well as simple checksum detection.
 from __future__ import annotations
 
 import json
+import ast
 import os
 import subprocess
 import sys
@@ -22,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 from tools.gates.cases import CASES  # noqa: E402
 from tools.verify import (_artifact, _copy_performance_evidence, _expected_packaging_check_ids,
                           _generic_manifest, _package_report_case_is_complete, _prerequisite_evidence_satisfied,
-                          _copy_packaging_report, _review_receipt_errors, now, run_gate, run_g7_gate,
+                          _copy_packaging_report, _gate_failure_findings, _review_receipt_errors, now, run_gate, run_g7_gate,
                           validate_evidence, sha256)  # noqa: E402
 
 
@@ -92,6 +93,54 @@ def _reseal(run: Path, state: str | None = None) -> None:
 
 
 class EvidenceTamperingTests(unittest.TestCase):
+    def test_every_mapped_case_node_resolves_to_a_test_definition(self) -> None:
+        missing: list[str] = []
+        for case_id, case in CASES.items():
+            for node in case.test_nodes:
+                parts = node.split("::")
+                source = ROOT / parts[0]
+                if not source.is_file():
+                    missing.append(f"{case_id}: missing file {parts[0]}")
+                    continue
+                tree = ast.parse(source.read_text(), filename=parts[0])
+                body = tree.body
+                resolved = True
+                for name in parts[1:]:
+                    definition = next((item for item in body
+                                       if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                                       and item.name == name), None)
+                    if definition is None:
+                        missing.append(f"{case_id}: unresolved node {node} (missing {name})")
+                        resolved = False
+                        break
+                    body = definition.body if isinstance(definition, ast.ClassDef) else []
+                if resolved and not parts[-1].startswith("test_"):
+                    missing.append(f"{case_id}: mapped node is not a test function: {node}")
+        self.assertEqual(missing, [])
+
+    def test_failed_gate_with_string_observation_keeps_valid_fail_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = _make_run(Path(directory))
+            checks = json.loads((run / "checks.json").read_text())
+            failed = next(row for row in checks if row["check_id"] == "T24")
+            failed["status"] = "FAIL"
+            failed["observed"] = "pytest collection failed; independent report unavailable"
+            findings = _gate_failure_findings(checks)
+            self.assertEqual(findings, [
+                "T24: pytest collection failed; independent report unavailable"
+            ])
+            (run / "checks.json").write_text(json.dumps(checks, indent=2, sort_keys=True) + "\n")
+            _reseal(run, "FAIL")
+            manifest = json.loads((run / "manifest.json").read_text())
+            manifest["findings"] = findings
+            (run / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+            self.assertEqual(validate_evidence(run), [])
+            retained = json.loads((run / "checks.json").read_text())
+            self.assertEqual(next(row for row in retained if row["check_id"] == "T24")["observed"],
+                             "pytest collection failed; independent report unavailable")
+            self.assertEqual(json.loads((run / "manifest.json").read_text())["status"], "FAIL")
+
     def _review_fixture(self, run: Path) -> tuple[dict, dict]:
         artifact_root = run / "review-artifacts" / "logs"
         artifact_root.mkdir(parents=True)
