@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rimworld-save-inspector"
+version = "0.1.0"
+description = "Read-only structured inspection of RimWorld save files"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+dependencies = [
+  "defusedxml>=0.7.1,<0.8",
+  "pydantic>=2.10,<3",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp==2.3.0"]
+dev = [
+  "build>=1.2",
+  "jsonschema>=4.23",
+  "pytest>=8.3",
+  "pytest-cov>=6",
+]
+
+[project.scripts]
+rim-save = "rimworld_save_inspector.cli:main"
+rim-save-mcp = "rimworld_save_inspector.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rimworld_save_inspector"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
