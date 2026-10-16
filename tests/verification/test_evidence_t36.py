@@ -8,6 +8,7 @@ the assertion targets semantic checks as well as simple checksum detection.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -19,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from tools.gates.cases import CASES  # noqa: E402
-from tools.verify import (_artifact, _generic_manifest, _prerequisite_evidence_satisfied,
+from tools.verify import (_artifact, _copy_performance_evidence, _expected_packaging_check_ids,
+                          _generic_manifest, _package_report_case_is_complete, _prerequisite_evidence_satisfied,
                           _copy_packaging_report, _review_receipt_errors, now, run_gate, run_g7_gate,
                           validate_evidence, sha256)  # noqa: E402
 
@@ -390,6 +392,94 @@ class EvidenceTamperingTests(unittest.TestCase):
                         self.assertIsNone(copied)
                         self.assertIsNone(relative)
                         self.assertFalse((run / "package-dist").exists())
+
+    def test_packaging_case_mapping_matches_t33_rows_and_keeps_t37_audit_separate(self) -> None:
+        t33_ids = _expected_packaging_check_ids()
+        report = {"status": "PASS", "case_ids": ["T33", "T37"], "cases": [
+            *({"case_id": "T33", "check_id": check_id, "status": "PASS"} for check_id in sorted(t33_ids)),
+            {"case_id": "T37", "check_id": "audit-scanner-probes", "status": "PASS",
+             "observed": {"unsafe_path": True, "credential_marker": True, "private_xml_marker": True,
+                          "synthetic_design_exempt": True}},
+            {"case_id": "T37", "check_id": "audit:.whl", "status": "PASS",
+             "observed": {"forbidden_names": [], "forbidden_content": []}},
+            {"case_id": "T37", "check_id": "audit:.gz", "status": "PASS",
+             "observed": {"forbidden_names": [], "forbidden_content": []}},
+        ]}
+        self.assertTrue(_package_report_case_is_complete(report, "T33"))
+        self.assertTrue(_package_report_case_is_complete(report, "T37"))
+        self.assertNotIn("audit:.whl", t33_ids)
+        self.assertNotIn("audit:.gz", t33_ids)
+
+        with self.subTest("missing true-required row"):
+            missing = json.loads(json.dumps(report))
+            missing["cases"] = [row for row in missing["cases"]
+                                 if not (row.get("case_id") == "T33" and
+                                         row.get("check_id") == "cli-domain:wheel-cli-only:summary:0")]
+            self.assertFalse(_package_report_case_is_complete(missing, "T33"))
+        with self.subTest("failed true-required row"):
+            failed = json.loads(json.dumps(report))
+            next(row for row in failed["cases"] if row.get("case_id") == "T33" and
+                 row.get("check_id") == "build")["status"] = "FAIL"
+            self.assertFalse(_package_report_case_is_complete(failed, "T33"))
+        with self.subTest("duplicate true-required row"):
+            duplicate = json.loads(json.dumps(report))
+            duplicate["cases"].append({"case_id": "T33", "check_id": "build", "status": "PASS"})
+            self.assertFalse(_package_report_case_is_complete(duplicate, "T33"))
+        with self.subTest("audit rows cannot migrate into T33"):
+            misplaced = json.loads(json.dumps(report))
+            misplaced["cases"].append({"case_id": "T33", "check_id": "audit:.whl", "status": "PASS"})
+            self.assertFalse(_package_report_case_is_complete(misplaced, "T33"))
+
+    def test_performance_evidence_uses_scoped_explicit_report_and_rejects_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
+            root = Path(directory)
+            source_run = root / "evidence" / "performance-formal-006"
+            source_run.mkdir(parents=True)
+            for number in range(1, 4):
+                for suffix in ("stdout", "stderr", "exitcode"):
+                    (source_run / f"run-{number}.{suffix}").write_text(f"006-{number}-{suffix}\n")
+            default_report = root / "briefs" / "performance-report.md"
+            explicit_report = root / "briefs" / "formal-006.md"
+            default_report.parent.mkdir()
+            default_report.write_text("historical formal-004 report\n")
+            explicit_report.write_text("formal-006 strict result\n")
+            run = root / "G6" / "run-001"
+            run.mkdir(parents=True)
+
+            with patch("tools.verify.ROOT", root), patch.dict(os.environ, {
+                    "RWSI_PERFORMANCE_RUN": "evidence/performance-formal-006",
+                    "RWSI_PERFORMANCE_REPORT": "briefs/formal-006.md"}):
+                evidence_dir, report_path = _copy_performance_evidence(run)
+
+            self.assertEqual(evidence_dir, "performance-formal")
+            self.assertEqual(report_path, "performance-report.md")
+            self.assertEqual((run / report_path).read_text(), "formal-006 strict result\n")
+            self.assertEqual((run / evidence_dir / "run-1.stdout").read_text(), "006-1-stdout\n")
+
+            escaped_run = root / "G6" / "run-002"
+            escaped_run.mkdir()
+            escaped_report = Path(outside) / "performance.md"
+            escaped_report.write_text("outside root\n")
+            with patch("tools.verify.ROOT", root), patch.dict(os.environ, {
+                    "RWSI_PERFORMANCE_RUN": "evidence/performance-formal-006",
+                    "RWSI_PERFORMANCE_REPORT": str(escaped_report)}):
+                evidence_dir, report_path = _copy_performance_evidence(escaped_run)
+            self.assertIsNone(evidence_dir)
+            self.assertIsNone(report_path)
+            self.assertFalse((escaped_run / "performance-formal").exists())
+
+    def test_current_performance_report_authenticates_formal006_and_records_strict_failure(self) -> None:
+        report = (ROOT / "briefs/performance-report.md").read_text()
+        hashes = report.split("Provenance hashes:", 1)[-1]
+        for relative in ("src/rimworld_save_inspector/parser/core.py",
+                         "src/rimworld_save_inspector/service.py",
+                         "tools/performance/benchmark_core.py"):
+            with self.subTest(path=relative):
+                self.assertIn(f"{relative} `{sha256(ROOT / relative)}`", hashes)
+        self.assertIn("evidence/performance-formal-006", report)
+        self.assertIn("Formal-006 strict result: FAIL", report)
+        self.assertIn("527,627,375 ns", report)
+        self.assertIn("250,000,000 ns", report)
 
 
 if __name__ == "__main__":
