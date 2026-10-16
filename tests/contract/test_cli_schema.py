@@ -200,13 +200,26 @@ def test_cli_transport_options_and_mcp_component_error_are_structured():
     assert "Loading seed.rws" in verbose.stderr
     Draft202012Validator(SUCCESS_SCHEMAS["inspect"]).validate(json.loads(verbose.stdout))
 
-    if importlib.util.find_spec("rimworld_save_inspector.mcp_server") is None:
-        mcp_result = invoke("mcp", "--save", str(SAVE))
-        assert mcp_result.returncode == 2
-        mcp_error = json.loads(mcp_result.stdout)
-        Draft202012Validator(ERROR_SCHEMA).validate(mcp_error)
-        assert mcp_error["error"]["code"] == "MCP_EXTRA_REQUIRED"
-        assert "Traceback" not in mcp_result.stderr
+    # Simulate a CLI-only install where the module exists but its optional SDK
+    # dependency is unavailable. This exercises import failure during startup.
+    assert importlib.util.find_spec("rimworld_save_inspector.mcp_server") is not None
+    import_code = (
+        "import importlib.abc, importlib.util, sys; "
+        "assert importlib.util.find_spec('rimworld_save_inspector.mcp_server') is not None; "
+        "class_blocker = type('BlockMcp', (importlib.abc.MetaPathFinder,), "
+        "{'find_spec': lambda self, fullname, path=None, target=None: "
+        "(_ for _ in ()).throw(ModuleNotFoundError(\"No module named 'mcp'\", name='mcp')) "
+        "if fullname == 'mcp' or fullname.startswith('mcp.') else None}); "
+        "sys.meta_path.insert(0, class_blocker()); "
+        "from rimworld_save_inspector import cli; "
+        f"raise SystemExit(cli.main(['mcp', '--save', {str(SAVE)!r}]))"
+    )
+    mcp_result = subprocess.run([str(PYTHON), "-c", import_code], cwd=ROOT, text=True, capture_output=True)
+    assert mcp_result.returncode == 2, (mcp_result.stdout, mcp_result.stderr)
+    mcp_error = json.loads(mcp_result.stdout)
+    Draft202012Validator(ERROR_SCHEMA).validate(mcp_error)
+    assert mcp_error["error"]["code"] == "MCP_EXTRA_REQUIRED"
+    assert "Traceback" not in mcp_result.stderr
 
 
 def test_service_and_cli_emit_canonical_equal_query_objects():
@@ -321,8 +334,35 @@ def test_cli_broken_pipe_and_interrupt_exit_behavior(monkeypatch, capsys):
     process.stdout.close()
     stderr = process.stderr.read().decode("utf-8") if process.stderr is not None else ""
     return_code = process.wait(timeout=10)
-    assert return_code == 0
-    assert "BrokenPipe" not in stderr
+    command = [str(PYTHON), "-m", "rimworld_save_inspector.cli", "inspect", str(SAVE), "metadata"]
+    assert return_code == 0, f"command={command!r}; stdout=<reader closed>; stderr={stderr!r}"
+    assert "BrokenPipe" not in stderr, f"command={command!r}; stdout=<reader closed>; stderr={stderr!r}"
+
+    # Exercise the error-response path with a real closed OS pipe. The child
+    # raises a domain error before writing JSON; the parent closes its reader
+    # immediately, so an uncaught write/flush failure would show up in stderr
+    # and a non-contract exit code.
+    error_code = (
+        "from rimworld_save_inspector import cli; "
+        "from rimworld_save_inspector.errors import InspectorError; "
+        "cli.load_snapshot = lambda _source: (_ for _ in ()).throw("
+        "InspectorError('SOURCE_NOT_FOUND', 'synthetic missing source')); "
+        f"raise SystemExit(cli.main(['inspect', {str(SAVE)!r}, 'metadata']))"
+    )
+    error_command = [str(PYTHON), "-c", error_code]
+    error_child = subprocess.Popen(
+        error_command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    assert error_child.stdout is not None
+    error_child.stdout.close()
+    error_stderr = error_child.stderr.read().decode("utf-8") if error_child.stderr is not None else ""
+    error_return_code = error_child.wait(timeout=10)
+    assert error_return_code == 2, (
+        f"command={error_command!r}; stdout=<reader closed>; stderr={error_stderr!r}"
+    )
+    assert "BrokenPipe" not in error_stderr, (
+        f"command={error_command!r}; stdout=<reader closed>; stderr={error_stderr!r}"
+    )
 
     monkeypatch.setattr(cli, "load_snapshot", lambda _source: (_ for _ in ()).throw(KeyboardInterrupt()))
     assert cli.main(["inspect", str(SAVE), "metadata"]) == 130
