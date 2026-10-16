@@ -30,6 +30,20 @@ rim-save-mcp = "rimworld_save_inspector.mcp_server:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/rimworld_save_inspector"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/rimworld_save_inspector",
+  "docs/design.md",
+  "docs/rimworld-save-inspector",
+  "tests",
+  "tools/verify.py",
+  "README.md",
+  "LICENSE",
+  "pyproject.toml",
+  "uv.lock",
+]
+exclude = [".private", "evidence", "briefs", "**/__pycache__", "**/*.pyc"]
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
