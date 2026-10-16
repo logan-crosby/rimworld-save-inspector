@@ -16,6 +16,7 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from rimworld_save_inspector.mcp_server import create_server
 from rimworld_save_inspector import mcp_server
+from rimworld_save_inspector.schemas import SUCCESS_SCHEMAS
 
 
 TOOL_NAMES = {
@@ -29,6 +30,22 @@ def test_discovery_has_exact_read_only_tools_and_strict_schemas(tmp_path):
     tools = anyio.run(server.list_tools)
     assert {tool.name for tool in tools} == TOOL_NAMES
     assert len(tools) == 10
+    expected_inputs = {
+        "inspect_save": set(), "get_colony_summary": {"snapshot_id", "map_id"},
+        "list_pawns": {"snapshot_id", "scope", "map_id", "faction", "pawn_def", "name", "guest_status", "limit", "cursor"},
+        "get_pawn": {"snapshot_id", "record_id", "section", "limit", "cursor"},
+        "get_health": {"snapshot_id", "record_id", "limit", "cursor"},
+        "get_genes": {"snapshot_id", "record_id", "group", "limit", "cursor"},
+        "get_equipment": {"snapshot_id", "record_id", "holder", "estimate_missing_as_one", "limit", "cursor"},
+        "get_inventory": {"snapshot_id", "record_id", "holder_id", "estimate_missing_as_one", "limit", "cursor"},
+        "get_research": {"snapshot_id", "section", "project_def", "limit", "cursor"},
+        "get_mods": {"snapshot_id", "limit", "cursor"},
+    }
+    response_queries = {
+        "inspect_save": "inspect", "get_colony_summary": "summary", "list_pawns": "pawns",
+        "get_pawn": "pawn", "get_health": "health", "get_genes": "genes",
+        "get_equipment": "equipment", "get_inventory": "inventory", "get_research": "research", "get_mods": "mods",
+    }
     for tool in tools:
         assert tool.annotations.read_only_hint is True
         assert tool.annotations.destructive_hint is False
@@ -36,6 +53,10 @@ def test_discovery_has_exact_read_only_tools_and_strict_schemas(tmp_path):
         assert tool.annotations.open_world_hint is False
         assert tool.input_schema.get("additionalProperties") is False
         assert tool.output_schema.get("additionalProperties") is False
+        assert set(tool.input_schema.get("properties", {})) == expected_inputs[tool.name]
+        assert tool.output_schema == SUCCESS_SCHEMAS[response_queries[tool.name]]
+        Draft202012Validator.check_schema(tool.input_schema)
+        Draft202012Validator.check_schema(tool.output_schema)
         assert "save_path" not in json.dumps(tool.input_schema)
         assert "path" not in tool.input_schema.get("properties", {})
     async def invoke():
@@ -141,6 +162,16 @@ def test_concurrent_first_load_is_single_worker_and_ready_snapshot_is_pinned(tmp
     fixture = __import__("pathlib").Path(__file__).parents[1] / "fixtures/synthetic/seed.rws"
     save = tmp_path / "pinned.rws"
     shutil.copyfile(fixture, save)
+    path_type = type(save)
+    original_path_open = path_type.open
+    source_reads = []
+
+    def counted_open(path, mode="r", *args, **kwargs):
+        if path.resolve(strict=False) == save.resolve(strict=False) and "r" in mode and "+" not in mode:
+            source_reads.append(mode)
+        return original_path_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(path_type, "open", counted_open)
     original_load = mcp_server.load_snapshot
     started = threading.Event()
     release = threading.Event()
@@ -182,6 +213,7 @@ def test_concurrent_first_load_is_single_worker_and_ready_snapshot_is_pinned(tmp
     again = anyio.run(server.call_tool, "inspect_save", {})
     assert again.structured_content["snapshot_id"] == sid
     assert len(calls) == 1
+    assert source_reads == ["rb"], "inspect_save reopened the configured source after Ready"
     lifecycle.close()
     changed = fixture.read_bytes().replace(b"<seedString>fixture</seedString>", b"<seedString>fixture-new</seedString>")
     save.write_bytes(changed)
@@ -189,6 +221,7 @@ def test_concurrent_first_load_is_single_worker_and_ready_snapshot_is_pinned(tmp
     fresh = anyio.run(restarted.call_tool, "inspect_save", {})
     assert not fresh.is_error
     assert fresh.structured_content["snapshot_id"] != sid
+    assert source_reads == ["rb", "rb"]
     restarted._rim_save_lifecycle.close()
 
 
@@ -269,4 +302,16 @@ def test_stdio_disconnect_during_load_reaps_worker_and_process(tmp_path):
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait(timeout=2)
+
+    async def new_process_succeeds():
+        root = __import__("pathlib").Path(__file__).parents[2]
+        params = StdioServerParameters(command=sys.executable,
+            args=["-m", "rimworld_save_inspector.cli", "mcp", "--save", str(save)], cwd=str(root))
+        async with stdio_client(params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream, read_timeout_seconds=8) as session:
+                await session.initialize()
+                result = await session.call_tool("inspect_save", {})
+                assert not result.is_error
+                assert result.structured_content["snapshot_id"].startswith("sha256:")
+    anyio.run(new_process_succeeds)
 
