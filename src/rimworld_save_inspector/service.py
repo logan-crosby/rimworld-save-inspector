@@ -68,23 +68,35 @@ class QueryService:
         self._records = {r.record_id: r for r in snapshot.records}
         self._records_by_type: dict[str, list[Record]] = defaultdict(list)
         self._children: dict[str, list[Record]] = defaultdict(list)
+        self._items_by_holder: dict[str, list[Record]] = defaultdict(list)
+        self._pawns_by_holder: dict[str, list[Record]] = defaultdict(list)
         for record in snapshot.records:
             self._records_by_type[record.type_name].append(record)
             if record.owner_record_id:
                 self._children[record.owner_record_id].append(record)
+            if record.type_name in {"item", "pawn"} and "/li[" in record.source_path:
+                holder_path = record.source_path.rsplit("/li[", 1)[0]
+                if record.type_name == "item":
+                    self._items_by_holder[holder_path].append(record)
+                elif any(member.get("holder_id") == record_id_for_holder(holder_path) for member in record.memberships):
+                    self._pawns_by_holder[holder_path].append(record)
         self._player_faction = self.indexes.player_faction(snapshot)
         self._map_things_state = {
             record.record_id: _collection_state(snapshot, record.source_path + "/things[1]")
             for record in self._records_by_type["map"]
         }
         self._array_globals: list[tuple[str, str]] = []
+        self._references_by_holder: dict[str, list[tuple[str, str]]] = defaultdict(list)
         self._metadata_globals: dict[str, tuple[str, Any]] = {}
         self._reference_memberships: dict[str, list[dict[str, Any]]] = {}
+        self._holder_reference_diagnostics: list[Diagnostic] = []
         for path, raw in snapshot.globals.items():
             if "/li[" in path and any(marker in path for marker in (
                 "/innerList[", "/modIds[", "/modNames[", "/researchManager[",
             )):
                 self._array_globals.append((path, str(raw)))
+                if "/innerList[" in path and path.rsplit("/", 1)[-1].startswith("li["):
+                    self._references_by_holder[path.rsplit("/li[", 1)[0]].append((path, str(raw)))
             leaf = path.rsplit("/", 1)[-1].split("[", 1)[0]
             if leaf in {"gameVersion", "name", "seedString", "ticksGame", "currentProj"}:
                 normalized_path = re.sub(r"\[\d+\]", "", path)
@@ -103,9 +115,14 @@ class QueryService:
                             "holder_id": None, "source_path": source_path,
                         })
                 continue
-            if not isinstance(raw, str) or not raw.startswith("Thing_") or not _is_supported_reference_path(path):
+            if not isinstance(raw, str) or not raw.strip() or not _is_supported_reference_path(path):
                 continue
             reference = self.indexes.resolve(raw, "thing")
+            if reference.status in {"unresolved", "ambiguous"}:
+                code = "UNRESOLVED_REFERENCE" if reference.status == "unresolved" else "AMBIGUOUS_REFERENCE"
+                self._holder_reference_diagnostics.append(
+                    Diagnostic(code, "warning", code.replace("_", " ").lower(), path)
+                )
             if reference.status != "resolved" or not reference.target_record_ids:
                 continue
             tags = re_tags(path)
@@ -115,6 +132,45 @@ class QueryService:
                     "scope": "held", "map_id": None, "pool": pool_name,
                     "holder_id": record_id_for_holder(path.rsplit("/li[", 1)[0]), "source_path": path,
                 })
+        self._holder_cycles = self._find_holder_cycles()
+
+    def _find_holder_cycles(self) -> tuple[tuple[str, ...], ...]:
+        graph: dict[str, set[str]] = defaultdict(set)
+        for item in self._records_by_type["item"]:
+            path = item.source_path + "/innerContainer[1]/innerList[1]"
+            for child in self._items_by_holder.get(path, ()):
+                graph[item.record_id].add(child.record_id)
+            for source_path, raw in self._references_by_holder.get(path, ()):
+                reference = self.indexes.resolve(raw, "thing")
+                if reference.status == "resolved" and reference.target_record_ids:
+                    target = self._records.get(reference.target_record_ids[0])
+                    if target is not None and target.type_name == "item":
+                        graph[item.record_id].add(target.record_id)
+        cycles: set[tuple[str, ...]] = set()
+        done: set[str] = set()
+        for start in graph:
+            if start in done:
+                continue
+            stack: list[tuple[str, Any]] = [(start, iter(graph.get(start, ())))]
+            positions = {start: 0}
+            path = [start]
+            while stack:
+                node, children = stack[-1]
+                target = next(children, None)
+                if target is None:
+                    stack.pop()
+                    done.add(node)
+                    positions.pop(node, None)
+                    path.pop()
+                    continue
+                if target in positions:
+                    cycle = path[positions[target]:]
+                    cycles.add(min(tuple(cycle[index:] + cycle[:index]) for index in range(len(cycle))))
+                elif target in graph and target not in done:
+                    positions[target] = len(path)
+                    path.append(target)
+                    stack.append((target, iter(graph[target])))
+        return tuple(sorted(cycles))
 
     def execute(self, query: QueryRequest) -> QueryResponse:
         if not isinstance(query, QueryRequest):
@@ -215,13 +271,30 @@ class QueryService:
                 "snapshot_lifetime": self.snapshot_lifetime, "record_totals": totals, "scope_coverage": scopes,
                 "domain_availability": domains}
 
-    def _coverage(self, scope: str, *, force_partial: bool = False) -> dict[str, Any]:
+    def _coverage(self, scope: str, *, force_partial: bool = False, include_holder: bool = False) -> dict[str, Any]:
         pawn_candidate_affects_scope = scope in {"map", "all_supported"}
         diagnostics = [d for d in self.snapshot.diagnostics
-                       if d.code != "UNSUPPORTED_PAWN_CANDIDATE" or pawn_candidate_affects_scope]
+                       if d.code != "UNSUPPORTED_PAWN_CANDIDATE" or
+                       scope == "all_supported" or scope == "map" and _is_direct_map_thing(d.source_path)]
         counts = dict(self.snapshot.diagnostic_counts)
-        if not pawn_candidate_affects_scope:
+        if scope == "map":
+            if self.snapshot.direct_map_candidate_count:
+                counts["UNSUPPORTED_PAWN_CANDIDATE"] = self.snapshot.direct_map_candidate_count
+            else:
+                counts.pop("UNSUPPORTED_PAWN_CANDIDATE", None)
+        elif not pawn_candidate_affects_scope:
             counts.pop("UNSUPPORTED_PAWN_CANDIDATE", None)
+        if scope in {"held", "all_supported"} or include_holder:
+            for diagnostic in self._holder_reference_diagnostics:
+                counts[diagnostic.code] = counts.get(diagnostic.code, 0) + 1
+                diagnostics.append(diagnostic)
+            for cycle in self._holder_cycles:
+                counts["REFERENCE_CYCLE"] = counts.get("REFERENCE_CYCLE", 0) + 1
+                record = self._records.get(cycle[0])
+                diagnostics.append(Diagnostic("REFERENCE_CYCLE", "warning", "holder reference cycle",
+                                              record.source_path if record else None,
+                                              record.record_id if record else None,
+                                              {"record_ids": list(cycle)}))
         for cycle in self.indexes.reference_cycles:
             cycle_records = [self._records.get(record_id) for record_id in cycle]
             if any(record is not None and (
@@ -295,12 +368,7 @@ class QueryService:
         for map_record in maps:
             direct = [p for p in self._records_by_type["pawn"] if p.scope == "map" and _map_prefix(map_record.source_path, p.source_path)]
             all_pawns.extend(direct)
-            unknown_map_pawn = any(
-                diagnostic.code == "UNSUPPORTED_PAWN_CANDIDATE"
-                and diagnostic.source_path is not None
-                and _map_prefix(map_record.source_path, diagnostic.source_path)
-                for diagnostic in self.snapshot.diagnostics
-            )
+            unknown_map_pawn = map_record.source_path in self.snapshot.direct_map_candidate_map_paths
             any_unknown_map_pawn |= unknown_map_pawn
             things_state = self._map_things_state[map_record.record_id]
             if things_state != "present":
@@ -474,16 +542,22 @@ class QueryService:
             else:
                 state = self._child_collection_state(
                     pawn, "equipment/equipment/innerList" if holder == "equipment" else "apparel/wornApparel/innerList")
-            items = _source_sort([r for r in children if r.type_name == "item" and r.source_path.startswith(selected_holder_path + "/li[")])
+            items = _source_sort(self._items_by_holder.get(selected_holder_path, []))
             item_entries = [{"entry_kind": "record", "source_path": r.source_path, "item": self._item(r), "reference": None, "pawn_record_id": None} for r in items]
             reference_entries = []
-            for source_path, raw_reference in self._ordered_globals(selected_holder_path + "/li["):
+            for source_path, raw_reference in sorted(self._references_by_holder.get(selected_holder_path, ()), key=lambda pair: _ordinal_key(pair[0])):
                 reference = self.indexes.resolve(raw_reference, "thing")
                 target_id = reference.target_record_ids[0] if reference.status == "resolved" else None
                 target = self._records.get(target_id) if target_id else None
                 reference_entries.append({"entry_kind": "reference", "source_path": source_path, "item": None,
                                           "reference": reference.as_dict(),
                                           "pawn_record_id": target_id if target is not None and target.type_name == "pawn" else None})
+            for held_pawn in self._pawns_by_holder.get(selected_holder_path, []):
+                raw_reference = "Thing_" + held_pawn.saved_id if held_pawn.saved_id else None
+                reference = self.indexes.resolve(raw_reference, "thing") if raw_reference else self.indexes.resolve(None, "thing", state="absent")
+                reference_entries.append({"entry_kind": "reference", "source_path": held_pawn.source_path,
+                                          "item": None, "reference": reference.as_dict(),
+                                          "pawn_record_id": held_pawn.record_id})
             item_entries = sorted(item_entries + reference_entries, key=lambda e: _ordinal_key(e["source_path"]))
             item_identities = {r.record_id: r for r in items}
             for entry in reference_entries:
@@ -512,7 +586,7 @@ class QueryService:
                     "item_record_count": len(items) if state == "present" else None,
                     "resolved_item_count": len(item_identities) if state == "present" else None,
                     "quantity": quantity, "entries": item_entries}
-            return normalized, data, self._coverage(pawn.scope or "held", force_partial=state != "present"), item_entries
+            return normalized, data, self._coverage(pawn.scope or "held", force_partial=state != "present", include_holder=True), item_entries
         raise InspectorError("INVALID_ARGUMENT", "Unknown pawn query.", snapshot_id=self.snapshot.snapshot_id)
 
     def _domain_record(self, record: Record) -> dict[str, Any]:
@@ -544,10 +618,15 @@ class QueryService:
         return candidates[0][1] if candidates else "absent"
 
     def _owned_holder_path(self, pawn: Record, holder_id: str) -> str | None:
-        candidates = [path for path in self.snapshot.collection_states
-                      if path.startswith(pawn.source_path + "/") and path.endswith("/innerList[1]") and "/inventory[" in path]
-        candidates.append(pawn.source_path + "/inventory[1]/innerContainer[1]/innerList[1]")
-        for path in set(candidates):
+        root_path = _root_holder_path(pawn, "inventory")
+        candidates = {root_path}
+        for item in self._records_by_type["item"]:
+            if not item.source_path.startswith(root_path + "/li["):
+                continue
+            path = item.source_path + "/innerContainer[1]/innerList[1]"
+            if path in self.snapshot.collection_states:
+                candidates.add(path)
+        for path in candidates:
             if record_id_for_holder(path) == holder_id:
                 return path
         return None
@@ -561,9 +640,18 @@ class QueryService:
                    for r in self._children.get(pawn.record_id, ()))
 
     def _item(self, record: Record) -> dict[str, Any]:
+        nested_path = record.source_path + "/innerContainer[1]/innerList[1]"
+        nested_state = self.snapshot.collection_states.get(nested_path)
+        nested_holders = ([{"holder_id": record_id_for_holder(nested_path), "collection_state": str(nested_state),
+                            "entry_count": self._holder_entry_count(nested_path) if nested_state == "present" else None}]
+                          if nested_state is not None else [])
         return {**self._record_meta(record), "item_def": _get(record, "/def"), "saved_class": _get(record, "/@Class"),
                 "stuff": _get(record, "/stuff"), "quality": _get(record, "/quality"), "hit_points": _coerce_int(_get(record, "/health")),
-                "stack_count": _coerce_int(_get(record, "/stackCount")), "position_raw": _get(record, "/pos"), "nested_holders": []}
+                "stack_count": _coerce_int(_get(record, "/stackCount")), "position_raw": _get(record, "/pos"), "nested_holders": nested_holders}
+
+    def _holder_entry_count(self, path: str) -> int:
+        return (len(self._items_by_holder.get(path, ())) + len(self._pawns_by_holder.get(path, ()))
+                + len(self._references_by_holder.get(path, ())))
 
     def _paired_domain(self, name: str, filters: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
         # Parallel arrays are extracted as independent source sides; no zip truncation is permitted.
@@ -740,7 +828,7 @@ def _is_supported_reference_path(path: str) -> bool:
         return False
     joined = "/".join(tags)
     return ("pawnsForcefullyKeptAsWorldPawns" in tags
-            or "innerContainer" in tags and ("things" in tags or "inventory" in tags)
+            or "innerContainer" in tags and ("things" in tags or "inventory" in tags or "transportShipManager" in tags)
             or "pawns" in tags and ("worldObjects" in tags or "transportShipManager" in tags))
 
 
@@ -758,6 +846,10 @@ def _world_pool_reference(path: str) -> str | None:
 
 def _map_prefix(map_path: str, pawn_path: str) -> bool:
     return pawn_path.startswith(map_path + "/things[")
+
+
+def _is_direct_map_thing(path: str | None) -> bool:
+    return path is not None and re_tags(path)[-4:] == ("maps", "li", "things", "thing")
 
 
 def _global(snapshot: Snapshot, suffix: str) -> Any:

@@ -27,6 +27,143 @@ class IdentityContractTests(unittest.TestCase):
         self.assertEqual(record_id_for_path("pawn", path), expected)
 
 
+class HolderGraphTests(unittest.TestCase):
+    def test_holder_reference_cycle_and_ambiguous_identity_are_reported(self):
+        xml = b"""<savegame><game><maps><li><uniqueID>0</uniqueID><things>
+        <thing Class='Pawn'><id>Carrier</id><def>Human</def><inventory><innerContainer><innerList>
+        <li><id>Box</id><def>Crate</def><innerContainer><innerList><li>Thing_Box</li>
+        <li>Thing_Duplicate</li><li>Thing_Missing</li></innerList></innerContainer></li>
+        <li><id>Duplicate</id><def>Gem</def></li><li><id>Duplicate</id><def>Gem</def></li>
+        </innerList></innerContainer></inventory></thing>
+        </things></li></maps></game></savegame>"""
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = _load_xml(directory, "holder-cycle.rws", xml)
+        service = QueryService(snapshot)
+        pawn = next(r for r in snapshot.records if r.type_name == "pawn")
+        root = service.execute(QueryRequest("inventory", {"record_id": pawn.record_id})).data
+        nested_id = root["entries"][0]["item"]["nested_holders"][0]["holder_id"]
+        nested = service.execute(QueryRequest("inventory", {"record_id": pawn.record_id,
+                                                           "holder_id": nested_id})).as_dict()
+        self.assertEqual([e["reference"]["status"] for e in nested["data"]["entries"]],
+                         ["resolved", "ambiguous", "unresolved"])
+        self.assertGreaterEqual(nested["coverage"]["diagnostic_counts"].get("REFERENCE_CYCLE", 0), 1)
+        self.assertEqual(nested["coverage"]["diagnostic_counts"]["AMBIGUOUS_REFERENCE"], 1)
+        self.assertEqual(nested["coverage"]["diagnostic_counts"]["UNRESOLVED_REFERENCE"], 1)
+
+    def test_unsupported_pawn_holder_does_not_attach_child_records_to_parent(self):
+        xml = b"""<savegame><game><maps><li><uniqueID>0</uniqueID><things>
+        <thing Class='Pawn'><id>Parent</id><def>Human</def><carryTracker><innerContainer><innerList>
+        <li Class='Pawn'><id>UnknownChild</id><def>Human</def><genes><endogenes>
+        <li><loadID>1</loadID><def>GeneA</def></li></endogenes></genes></li>
+        </innerList></innerContainer></carryTracker></thing>
+        </things></li></maps></game></savegame>"""
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = _load_xml(directory, "unsupported-holder.rws", xml)
+        self.assertEqual([r.saved_id for r in snapshot.records if r.type_name == "pawn"], ["Parent"])
+        self.assertFalse(any(r.type_name == "gene" for r in snapshot.records))
+        self.assertEqual(snapshot.direct_map_candidate_count, 0)
+        self.assertEqual(snapshot.diagnostic_counts["UNSUPPORTED_PAWN_CANDIDATE"], 1)
+        self.assertEqual(snapshot.diagnostic_counts["UNSUPPORTED_HOLDER"], 1)
+        summary = QueryService(snapshot).execute(QueryRequest("summary")).data
+        self.assertEqual(summary["maps"][0]["direct_pawn_count"], 1)
+
+    def test_reference_mode_after_list_does_not_define_structured_child(self):
+        xml = b"""<savegame><game><maps><li><uniqueID>0</uniqueID><things>
+        <thing Class='Pawn'><id>Carrier</id><def>Human</def><inventory><innerContainer><innerList>
+        <li><id>Shared</id><def>Gem</def></li><li><id>Missing</id></li>
+        </innerList><contentsLookMode>Reference</contentsLookMode></innerContainer></inventory></thing>
+        <thing Class='Pawn'><id>Owner</id><def>Human</def><inventory><innerContainer>
+        <contentsLookMode>Deep</contentsLookMode><innerList><li><id>Shared</id><def>Gem</def></li></innerList>
+        </innerContainer></inventory></thing>
+        </things></li></maps></game></savegame>"""
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = _load_xml(directory, "reference-after-list.rws", xml)
+        service = QueryService(snapshot)
+        pawn = next(r for r in snapshot.records if r.type_name == "pawn" and r.saved_id == "Carrier")
+        self.assertFalse(any(r.type_name == "item" and r.source_path.startswith(pawn.source_path)
+                             for r in snapshot.records))
+        entries = service.execute(QueryRequest("inventory", {"record_id": pawn.record_id})).data["entries"]
+        self.assertEqual([e["reference"]["status"] for e in entries], ["resolved", "unresolved"])
+        self.assertEqual([e["entry_kind"] for e in entries], ["reference", "reference"])
+        self.assertNotIn("INFERRED_HOLDER_MODE", snapshot.diagnostic_counts)
+
+    def test_corpse_world_object_and_ship_adapters_keep_one_pawn_definition(self):
+        xml = b"""<savegame><game><world><worldObjects><worldObjects><li><ID>1</ID><def>Ship</def>
+        <pawns><innerList><li>Thing_WorldOne</li></innerList></pawns></li></worldObjects></worldObjects></world>
+        <maps><li><uniqueID>0</uniqueID><things><thing Class='Corpse'><id>Dead1</id><def>Corpse_Human</def>
+        <innerContainer><contentsLookMode>Reference</contentsLookMode><innerList><li>Thing_WorldOne</li></innerList></innerContainer></thing>
+        </things></li></maps><transportShipManager><ships><li><shipThing><innerContainer>
+        <contentsLookMode>Deep</contentsLookMode><innerList><li Class='Pawn'><id>ShipOne</id><def>Human</def></li>
+        </innerList></innerContainer></shipThing></li></ships></transportShipManager>
+        <worldPawns><pawnsAlive><li Class='Pawn'><id>WorldOne</id><def>Human</def></li></pawnsAlive></worldPawns>
+        </game></savegame>"""
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = _load_xml(directory, "holder-adapters.rws", xml)
+        service = QueryService(snapshot)
+        pawns = [r for r in snapshot.records if r.type_name == "pawn"]
+        self.assertEqual({r.saved_id for r in pawns}, {"ShipOne", "WorldOne"})
+        self.assertEqual(len(snapshot.auxiliary_records), 1)
+        held = service.execute(QueryRequest("pawns", {"scope": "held"})).data["entries"]
+        self.assertEqual({row["saved_id"] for row in held}, {"ShipOne", "WorldOne"})
+        world = next(row for row in held if row["saved_id"] == "WorldOne")
+        self.assertGreaterEqual(len([m for m in world["memberships"] if m["scope"] == "held"]), 2)
+        ship = next(r for r in pawns if r.saved_id == "ShipOne")
+        self.assertEqual(ship.memberships[0]["holder_id"],
+                         record_id_for_path("holder", ship.source_path.rsplit("/li[", 1)[0]))
+        self.assertNotIn("INFERRED_HOLDER_MODE", snapshot.diagnostic_counts)
+
+    def test_immediate_inventory_edges_nested_selector_and_inferred_mode(self):
+        xml = b"""<savegame><game><maps><li><uniqueID>0</uniqueID><things>
+        <thing Class='Pawn'><id>Carrier</id><def>Human</def><inventory><innerContainer><innerList>
+        <li><id>Crate</id><def>Box</def><stackCount>2</stackCount><innerContainer><innerList>
+        <li><id>Gem</id><def>Gem</def><stackCount>5</stackCount></li><li>Thing_Elsewhere</li>
+        </innerList></innerContainer></li></innerList></innerContainer></inventory></thing>
+        <thing Class='ThingWithComps'><id>MapCrate</id><def>Box</def><innerContainer><innerList>
+        <li><id>MapGem</id><def>Gem</def></li><li>Thing_Elsewhere</li>
+        </innerList></innerContainer></thing>
+        </things></li></maps></game></savegame>"""
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = _load_xml(directory, "holder-graph.rws", xml)
+        service = QueryService(snapshot)
+        pawn = next(r for r in snapshot.records if r.type_name == "pawn")
+        root = service.execute(QueryRequest("inventory", {"record_id": pawn.record_id})).data
+        self.assertEqual([e["item"]["saved_id"] for e in root["entries"]], ["Crate"])
+        self.assertEqual(root["entry_count"], 1)
+        self.assertEqual(root["quantity"]["explicit_stack_units"], 2)
+        nested = root["entries"][0]["item"]["nested_holders"]
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(nested[0]["entry_count"], 2)
+        child = service.execute(QueryRequest("inventory", {"record_id": pawn.record_id,
+                                                          "holder_id": nested[0]["holder_id"]})).data
+        self.assertEqual([e["item"]["saved_id"] if e["item"] else None for e in child["entries"]], ["Gem", None])
+        self.assertEqual(child["entry_count"], 2)
+        self.assertEqual(child["quantity"]["explicit_stack_units"], 5)
+        map_gem = next(r for r in snapshot.records if r.type_name == "item" and r.saved_id == "MapGem")
+        self.assertEqual(len(map_gem.memberships), 1)
+        self.assertEqual(map_gem.memberships[0]["scope"], "held")
+        self.assertEqual(map_gem.memberships[0]["holder_id"], record_id_for_path("holder", map_gem.source_path.rsplit("/li[", 1)[0]))
+        self.assertEqual(snapshot.diagnostic_counts.get("INFERRED_HOLDER_MODE"), 3)
+
+    def test_foreign_nested_holder_selector_is_rejected(self):
+        xml = b"""<savegame><game><maps><li><uniqueID>0</uniqueID><things>
+        <thing Class='Pawn'><id>A</id><def>Human</def><inventory><innerContainer><innerList>
+        <li><id>ABox</id><def>Box</def><innerContainer><innerList><li><id>AGem</id><def>Gem</def></li></innerList></innerContainer></li>
+        </innerList></innerContainer></inventory></thing>
+        <thing Class='Pawn'><id>B</id><def>Human</def><inventory><innerContainer><innerList>
+        <li><id>BBox</id><def>Box</def><innerContainer><innerList><li><id>BGem</id><def>Gem</def></li></innerList></innerContainer></li>
+        </innerList></innerContainer></inventory></thing>
+        </things></li></maps></game></savegame>"""
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = _load_xml(directory, "foreign-holder.rws", xml)
+        service = QueryService(snapshot)
+        pawns = {r.saved_id: r for r in snapshot.records if r.type_name == "pawn"}
+        b_gem = next(r for r in snapshot.records if r.type_name == "item" and r.saved_id == "BGem")
+        foreign_id = record_id_for_path("holder", b_gem.source_path.rsplit("/li[", 1)[0])
+        with self.assertRaises(InspectorError) as raised:
+            service.execute(QueryRequest("inventory", {"record_id": pawns["A"].record_id, "holder_id": foreign_id}))
+        self.assertEqual(raised.exception.code, "HOLDER_NOT_OWNED")
+
+
 class SummaryContractTests(unittest.TestCase):
     def test_summary_metadata_and_parallel_arrays_preserve_source_matching_and_order(self):
         snapshot = Snapshot(
