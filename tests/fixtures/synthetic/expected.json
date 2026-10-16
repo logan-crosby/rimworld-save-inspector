@@ -1,0 +1,61 @@
+{
+  "summary": {
+    "map_count": 1,
+    "map_ids": ["0"],
+    "direct_thing_count": 2,
+    "direct_pawn_count": 1,
+    "player_faction": "Faction_7",
+    "ticks_game": 120000,
+    "world_name": "SyntheticWorld",
+    "world_seed": "fixture",
+    "parent_label": "Test Landing"
+  },
+  "pawn": {
+    "saved_id": "Human1",
+    "record_id": "pawn:c73f4033788f9e6a39c087625dc11a91b34f67dd74525db524cb542e585a25d3",
+    "name": {"first": "Alex", "nick": "Lex", "last": "Example"},
+    "gender": "Female",
+    "age_biological_ticks": 72000000,
+    "birth_abs_ticks": null,
+    "guest_status": null,
+    "host_faction": {"status": "explicit_null", "raw": null},
+    "slave_faction": {"status": "explicit_null", "raw": null},
+    "skills": [{"def": "Shooting", "level": 4, "passion": "Minor", "xp_raw": "15.5", "xp": 15.5}],
+    "traits": [{"def": "Tough", "degree": 1, "source_gene": "explicit_null", "suppressed_by": "explicit_null"}]
+  },
+  "health": {
+    "record_id": "hediff:1c77f1cc909c0c13bc825c50938798742e8ccc27da922ea2f6a552188776c47b",
+    "health_state": null,
+    "health_state_status": "absent",
+    "entries": [{"saved_id": "10", "def": "Cut", "severity_raw": "0.25", "severity": 0.25, "visible": true, "part": {"body": "Human", "index": 3}}]
+  },
+  "genes": {
+    "endogenes": 2,
+    "xenogenes": 0,
+    "entries": [
+      {"def": "GeneA", "load_id": "1", "pawn_reference": "Thing_Human1", "override": {"status": "resolved", "target_load_id": "2"}},
+      {"def": "GeneB", "load_id": "2", "pawn_reference": "Thing_Human1", "override": {"status": "explicit_null", "target_load_id": null}}
+    ],
+    "active_flags": null
+  },
+  "items": {
+    "equipment": [{"id": "Rifle1", "def": "Rifle", "quality": "Normal", "health": 100, "stack_count": null}],
+    "apparel": [{"id": "Hat1", "def": "Hat", "stuff": "Cloth", "quality": "Good", "health": 40, "stack_count": 1}],
+    "inventory": [{"id": "Medicine1", "def": "Medicine", "stack_count": 2}, {"id": "Food1", "def": "Food", "stack_count": null}],
+    "inventory_explicit_units": 2,
+    "inventory_missing_stack_count_records": 1,
+    "inventory_estimated_units_when_opted_in": 3
+  },
+  "research": {
+    "current_project": "SolarPower",
+    "progress": [{"project_def": "SolarPower", "progress_raw": "25.5", "progress": 25.5}, {"project_def": "Microelectronics", "progress_raw": "0", "progress": 0}],
+    "techprints": [{"project_def": "Microelectronics", "count_raw": "1", "count": 1}],
+    "completed": null
+  },
+  "mods": [
+    {"package_id": "ludeon.rimworld", "display_name": "Core"},
+    {"package_id": "example.synthetic", "display_name": "Synthetic Fixture"}
+  ],
+  "scope": {"map": 1, "world_alive": 0, "world_dead": 1, "world_mothballed": 0, "held": 1, "all_supported": 2},
+  "corpse_reference": {"corpse_count": 1, "dead_pool_matches": 1, "forcefully_kept_is_membership_only": true}
+}
