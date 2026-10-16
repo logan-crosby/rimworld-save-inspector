@@ -99,6 +99,7 @@ class _Handler(ContentHandler):
         self.collections: dict[str, str] = {}
         self.diagnostics: list[Diagnostic] = []
         self.diagnostic_counts: dict[str, int] = {}
+        self._unsupported_holder_paths: set[str] = set()
         self._retained_bytes = 0
         self.root_seen = False
         self.game_seen = False
@@ -195,15 +196,34 @@ class _Handler(ContentHandler):
                 self._retained_bytes += class_bytes
                 if self._retained_bytes > self.limits.retained_value_bytes:
                     raise InspectorError("LIMIT_EXCEEDED", "The normalized value byte limit was exceeded.", {"limit": "retained_value_bytes"})
-        if (name == "thing" and len(self.frames) >= 4 and self.frames[-2].tag == "things"
-                and self.frames[-3].tag == "li" and self.frames[-4].tag == "maps"):
+        direct_map_thing = (name == "thing" and len(self.frames) >= 4 and self.frames[-2].tag == "things"
+                            and self.frames[-3].tag == "li" and self.frames[-4].tag == "maps")
+        if direct_map_thing:
             map_builder = next((b for b in reversed(self.builders) if b.type_name == "map"), None)
             if map_builder:
                 map_builder.direct_thing_count += 1
                 if cls == "Pawn":
                     map_builder.direct_pawn_count += 1
+            if cls and cls not in {"Pawn", "Corpse"} and "pawn" in cls.casefold():
+                # An unfamiliar pawn class is not a supported record, but it
+                # makes direct-map population and colonist totals incomplete.
+                self._diagnostic("UNSUPPORTED_PAWN_CANDIDATE", path=path, detail=cls)
         self._mark_collections(path, is_null)
         kind, scope = self._candidate(name, cls)
+        if not kind and name == "li" and cls == "Pawn":
+            # Class-tagged pawn-shaped records outside a profile-recognized
+            # source remain unsupported, but must not disappear silently.
+            self._diagnostic("UNSUPPORTED_PAWN_CANDIDATE", path=path, detail=cls)
+            parent = self.frames[-2] if len(self.frames) >= 2 else None
+            in_record_container = any(frame.tag in {"thing", "shipThing", "worldObject"} for frame in self.frames[:-1])
+            recognized_parent = parent is not None and parent.tag in {
+                "maps", "allFactions", "worldObjects", "pawnsAlive", "pawnsDead", "pawnsMothballed",
+                "innerList", "hediffs", "endogenes", "xenogenes", "skills", "allTraits", "equipment",
+                "wornApparel", "inventory", "innerContainer", "pawns",
+            }
+            if in_record_container and parent is not None and not recognized_parent and parent.path not in self._unsupported_holder_paths:
+                self._unsupported_holder_paths.add(parent.path)
+                self._diagnostic("UNSUPPORTED_HOLDER", path=parent.path)
         if kind:
             parent_pawn = next((b for b in reversed(self.builders) if b.type_name == "pawn"), None)
             builder = _Builder(kind, path, {"Class": cls} if cls else {}, len(self.frames), owner_id=parent_pawn.record_id if parent_pawn else None, scope=scope)
