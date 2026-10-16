@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rimworld-save-inspector:gate-evidence:1.0",
+  "title": "RimWorld Save Inspector gate evidence",
+  "description": "Shape contract only. A separate verifier must validate artifact hashes, required case sets, prerequisite applicability and truth of PASS. This schema is not an implementation acceptance result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","run_id","gate_id","status","started_at","finished_at","actor","spec","candidate","environment","fixture","prerequisites","check_summary","artifacts","blockers","findings","carried_forward_from"],
+  "properties": {
+    "schema_version": {"const":"1.0"},
+    "run_id": {"type":"string","minLength":1,"maxLength":160,"pattern":"^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+    "gate_id": {"type":"string","pattern":"^G[0-8]$"},
+    "status": {"enum":["NOT_RUN","RUNNING","PASS","FAIL","BLOCKED"]},
+    "started_at": {"type":["string","null"],"format":"date-time"},
+    "finished_at": {"type":["string","null"],"format":"date-time"},
+    "actor": {"type":"string","minLength":1},
+    "spec": {
+      "type":"object","additionalProperties":false,
+      "required":["id","revision","sha256"],
+      "properties":{"id":{"const":"RWSI-1.0"},"revision":{"type":"string","minLength":1},"sha256":{"$ref":"#/$defs/sha256"}}
+    },
+    "candidate": {
+      "type":"object","additionalProperties":false,
+      "required":["commit","dirty","inputs","lock_sha256","package_version","parser_version","profile_version"],
+      "properties":{
+        "commit":{"type":["string","null"],"pattern":"^(?:[a-f0-9]{40}|[a-f0-9]{64})$"},
+        "dirty":{"type":"boolean"},
+        "inputs":{"type":"array","items":{"$ref":"#/$defs/input"}},
+        "lock_sha256":{"anyOf":[{"$ref":"#/$defs/sha256"},{"type":"null"}]},
+        "package_version":{"type":["string","null"]},
+        "parser_version":{"type":["string","null"]},
+        "profile_version":{"type":["string","null"]}
+      }
+    },
+    "environment": {
+      "type":"object","additionalProperties":false,
+      "required":["os","architecture","hardware","python_executable","python_version","dependencies"],
+      "properties":{
+        "os":{"type":"string","minLength":1},
+        "architecture":{"type":"string","minLength":1},
+        "hardware":{"type":"string","minLength":1},
+        "python_executable":{"type":"string","minLength":1},
+        "python_version":{"type":"string","minLength":1},
+        "dependencies":{"type":"object","additionalProperties":{"type":"string"}}
+      }
+    },
+    "fixture": {
+      "type":"object","additionalProperties":false,
+      "required":["label","available","expected_bytes","observed_bytes","expected_sha256","before_sha256","after_sha256","unavailable_reason"],
+      "properties":{
+        "label":{"type":"string","minLength":1},
+        "available":{"type":"boolean"},
+        "expected_bytes":{"type":["integer","null"],"minimum":0},
+        "observed_bytes":{"type":["integer","null"],"minimum":0},
+        "expected_sha256":{"anyOf":[{"$ref":"#/$defs/sha256"},{"type":"null"}]},
+        "before_sha256":{"anyOf":[{"$ref":"#/$defs/sha256"},{"type":"null"}]},
+        "after_sha256":{"anyOf":[{"$ref":"#/$defs/sha256"},{"type":"null"}]},
+        "unavailable_reason":{"type":["string","null"]}
+      }
+    },
+    "prerequisites": {
+      "type":"array",
+      "items":{
+        "type":"object","additionalProperties":false,
+        "required":["gate_id","run_id","satisfied","reason"],
+        "properties":{
+          "gate_id":{"type":"string","pattern":"^G[0-8]$"},
+          "run_id":{"type":["string","null"]},
+          "satisfied":{"type":"boolean"},
+          "reason":{"type":"string"}
+        }
+      }
+    },
+    "check_summary": {
+      "type":"object","additionalProperties":false,
+      "required":["required","passed","failed","blocked","not_run"],
+      "properties":{
+        "required":{"type":"integer","minimum":0},
+        "passed":{"type":"integer","minimum":0},
+        "failed":{"type":"integer","minimum":0},
+        "blocked":{"type":"integer","minimum":0},
+        "not_run":{"type":"integer","minimum":0}
+      }
+    },
+    "artifacts":{"type":"array","items":{"$ref":"#/$defs/artifact"}},
+    "blockers":{"type":"array","items":{"type":"string","minLength":1}},
+    "findings":{"type":"array","items":{"type":"string","minLength":1}},
+    "carried_forward_from":{
+      "anyOf":[
+        {"type":"null"},
+        {"type":"object","additionalProperties":false,"required":["run_id","input_equivalence_evidence"],"properties":{"run_id":{"type":"string","minLength":1},"input_equivalence_evidence":{"$ref":"#/$defs/relative_path"}}}
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if":{"properties":{"status":{"const":"PASS"}}},
+      "then":{
+        "properties":{
+          "started_at":{"type":"string","format":"date-time"},
+          "finished_at":{"type":"string","format":"date-time"},
+          "check_summary":{"properties":{"required":{"minimum":1},"failed":{"const":0},"blocked":{"const":0},"not_run":{"const":0}}},
+          "blockers":{"maxItems":0},
+          "artifacts":{"minItems":3}
+        }
+      }
+    },
+    {
+      "if":{"properties":{"status":{"const":"BLOCKED"}}},
+      "then":{"properties":{"blockers":{"minItems":1}}}
+    },
+    {
+      "if":{"properties":{"gate_id":{"const":"G7"},"status":{"const":"PASS"}}},
+      "then":{"properties":{"candidate":{"properties":{"commit":{"type":"string"},"dirty":{"const":false},"lock_sha256":{"$ref":"#/$defs/sha256"}}},"fixture":{"properties":{"available":{"const":true},"before_sha256":{"$ref":"#/$defs/sha256"},"after_sha256":{"$ref":"#/$defs/sha256"}}},"carried_forward_from":{"type":"null"}}}
+    }
+  ],
+  "$defs": {
+    "sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+    "relative_path":{"type":"string","minLength":1,"pattern":"^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)(?![A-Za-z]:).+$"},
+    "input":{
+      "type":"object","additionalProperties":false,
+      "required":["path","role","sha256"],
+      "properties":{"path":{"$ref":"#/$defs/relative_path"},"role":{"enum":["source","test","oracle","schema","spec","lock","config"]},"sha256":{"$ref":"#/$defs/sha256"}}
+    },
+    "artifact":{
+      "type":"object","additionalProperties":false,
+      "required":["path","bytes","sha256","purpose"],
+      "properties":{"path":{"$ref":"#/$defs/relative_path"},"bytes":{"type":"integer","minimum":0},"sha256":{"$ref":"#/$defs/sha256"},"purpose":{"type":"string","minLength":1}}
+    }
+  }
+}
