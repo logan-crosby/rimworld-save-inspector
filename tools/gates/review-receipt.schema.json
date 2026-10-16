@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rimworld-save-inspector:g7-review-receipt:1.0",
+  "title": "Independent G7 T37 review receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "case_id", "status", "reviewer", "started_at", "finished_at",
+    "candidate", "archives", "requirement_checks", "t37_checks", "reproductions", "findings", "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "case_id": {"const": "T37"},
+    "status": {"enum": ["PASS", "FAIL", "BLOCKED"]},
+    "reviewer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity", "run_id", "independent"],
+      "properties": {
+        "identity": {"type": "string", "minLength": 1},
+        "run_id": {"type": "string", "minLength": 1},
+        "independent": {"const": true}
+      }
+    },
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["commit", "git_tree_oid", "tree_sha256", "input_manifest_sha256"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"},
+        "git_tree_oid": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"},
+        "tree_sha256": {"$ref": "#/$defs/sha256"},
+        "input_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "archives": {
+      "type": "object", "additionalProperties": false, "required": ["wheel", "sdist"],
+      "properties": {
+        "wheel": {"$ref": "#/$defs/archive"},
+        "sdist": {"$ref": "#/$defs/archive"}
+      }
+    },
+    "requirement_checks": {
+      "type": "array", "minItems": 20, "maxItems": 20,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["requirement_id", "status", "expected", "observed", "evidence_refs"],
+        "properties": {
+          "requirement_id": {"type": "string", "pattern": "^R(0[1-9]|1[0-9]|20)$"},
+          "status": {"const": "PASS"},
+          "expected": {"type": ["object", "string"]},
+          "observed": {"type": ["object", "string"]},
+          "evidence_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/relative_path"}}
+        }
+      }
+    },
+    "t37_checks": {
+      "type": "array", "minItems": 4, "maxItems": 4,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["check_id", "status", "expected", "observed", "evidence_refs"],
+        "properties": {
+          "check_id": {"enum": ["archive_member_review", "prohibited_content_review", "source_provenance_review", "scalar_expectations_review"]},
+          "status": {"const": "PASS"},
+          "expected": {"type": ["object", "string"]},
+          "observed": {"type": ["object", "string"]},
+          "evidence_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/relative_path"}}
+        }
+      }
+    },
+    "reproductions": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["command_id", "argv", "cwd", "started_at", "duration_seconds", "exit_code", "expected", "observed", "stdout", "stderr"],
+        "properties": {
+          "command_id": {"type": "string", "minLength": 1},
+          "argv": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "cwd": {"type": "string", "minLength": 1},
+          "started_at": {"type": "string", "format": "date-time"},
+          "duration_seconds": {"type": "number", "minimum": 0},
+          "exit_code": {"const": 0},
+          "expected": {"type": ["object", "string"]},
+          "observed": {"type": ["object", "string"]},
+          "stdout": {"$ref": "#/$defs/log"},
+          "stderr": {"$ref": "#/$defs/log"}
+        }
+      }
+    },
+    "findings": {"type": "array"},
+    "artifacts": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path", "bytes", "sha256", "purpose"],
+        "properties": {
+          "path": {"$ref": "#/$defs/relative_path"},
+          "bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "purpose": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "relative_path": {"type": "string", "minLength": 1},
+    "archive": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sha256", "bytes", "members_sha256", "members"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "members_sha256": {"$ref": "#/$defs/sha256"},
+        "members": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["path", "bytes", "sha256"],
+            "properties": {
+              "path": {"$ref": "#/$defs/relative_path"},
+              "bytes": {"type": "integer", "minimum": 0},
+              "sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        }
+      }
+    },
+    "log": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relative_path"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}
