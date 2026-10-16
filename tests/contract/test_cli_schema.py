@@ -240,6 +240,19 @@ def test_service_and_cli_emit_canonical_equal_query_objects():
         assert actual == expected
 
 
+def test_cli_research_project_def_filter_matches_service():
+    cli_result = invoke("inspect", str(SAVE), "research", "--project-def", "SolarPower")
+    assert cli_result.returncode == 0, cli_result.stderr
+    cli_response = json.loads(cli_result.stdout)
+    service = QueryService(load_snapshot(SAVE), snapshot_lifetime="invocation")
+    service_response = service.execute(QueryRequest(
+        "research", {"project_def": "SolarPower", "section": "progress"},
+    )).as_dict()
+    assert cli_response["query"] == service_response["query"]
+    assert cli_response["data"]["entries"] == service_response["data"]["entries"]
+    assert cli_response["page"]["total"] == 1
+
+
 def test_service_schemas_reject_non_finite_values_and_unknown_nested_fields():
     schema = SUCCESS_SCHEMAS["health"]
     assert schema["additionalProperties"] is False
