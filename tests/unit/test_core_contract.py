@@ -333,6 +333,84 @@ class ReferenceAndPagingTests(unittest.TestCase):
         self.assertEqual(len(result.data["entries"]), 1)
         self.assertEqual(materialize.call_count, 1)
 
+
+class ResearchDecodingContractTests(unittest.TestCase):
+    def _research(self, value_xml: bytes, *, kind: str, current_xml: bytes = b"<currentProj>ProjectA</currentProj>",
+                  key_xml: bytes = b"<li>ProjectA</li>"):
+        values_name = b"values"
+        element = ("progress" if kind == "progress" else "techprints").encode()
+        xml = (b"<savegame><game><researchManager>" + current_xml + b"<" + element + b"><keys>" + key_xml + b"</keys><" +
+               values_name + b">" + value_xml + b"</" + values_name + b"></" + element + b"></researchManager></game></savegame>")
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = _load_xml(directory, "research-state.rws", xml)
+        return QueryService(snapshot).execute(QueryRequest("research", {"section": kind})).as_dict()
+
+    def test_paired_research_values_distinguish_zero_invalid_nonfinite_empty_and_explicit_null(self):
+        cases = (
+            (b"<li>0</li>", 0, None, "0"),
+            (b"<li>not-a-number</li>", None, "invalid", "not-a-number"),
+            (b"<li>NaN</li>", None, "invalid", "NaN"),
+            (b"<li>Infinity</li>", None, "invalid", "Infinity"),
+            (b"<li/>", None, "invalid", ""),
+            (b"<li IsNull='True'/>", None, "explicit_null", None),
+        )
+        for kind in ("progress", "techprints"):
+            for value_xml, expected_value, expected_status, expected_raw in cases:
+                with self.subTest(kind=kind, value_xml=value_xml):
+                    result = self._research(value_xml, kind=kind)
+                    data = result["data"]
+                    row = data["entries"][0]
+                    field = "/progress_points" if kind == "progress" else "/techprint_count"
+                    normalized = "progress_points" if kind == "progress" else "techprint_count"
+                    self.assertEqual(data["alignment"], "paired")
+                    self.assertEqual(row[normalized], expected_value)
+                    if expected_status is None:
+                        self.assertNotIn(field, row["field_status"])
+                    else:
+                        self.assertEqual(row["field_status"][field], expected_status)
+                    self.assertIn(field, row["raw_values"])
+                    self.assertEqual(row["raw_values"][field], expected_raw)
+                    if expected_status == "invalid":
+                        self.assertEqual(result["coverage"]["diagnostic_counts"].get("INVALID_VALUE"), 1)
+                    else:
+                        self.assertNotIn("INVALID_VALUE", result["coverage"]["diagnostic_counts"])
+
+    def test_current_project_distinguishes_absent_explicit_null_and_present_empty(self):
+        cases = (
+            (b"", None, "absent"),
+            (b"<currentProj IsNull='True'/>", None, "explicit_null"),
+            (b"<currentProj/>", "", None),
+        )
+        for current_xml, expected_value, expected_status in cases:
+            with self.subTest(current_xml=current_xml):
+                result = self._research(b"<li>0</li>", kind="progress", current_xml=current_xml)
+                data = result["data"]
+                self.assertEqual(data["current_project"], expected_value)
+                if expected_status is None:
+                    self.assertNotIn("/current_project", data["field_status"])
+                else:
+                    self.assertEqual(data["field_status"]["/current_project"], expected_status)
+
+    def test_nullable_research_project_key_is_not_stringified(self):
+        result = self._research(b"<li>0</li>", kind="progress", key_xml=b"<li IsNull='True'/>")
+        row = result["data"]["entries"][0]
+        self.assertIsNone(row["project_def"])
+        self.assertIsNone(row["saved_id"])
+        self.assertEqual(row["field_status"], {"/project_def": "explicit_null"})
+
+    def test_paired_mod_nulls_keep_nullable_string_status(self):
+        xml = b"""<savegame><meta><modIds><li>alpha</li><li IsNull='True'/></modIds>
+        <modNames><li IsNull='True'/><li/></modNames></meta><game/></savegame>"""
+        with tempfile.TemporaryDirectory() as directory:
+            service = QueryService(_load_xml(directory, "mods-null.rws", xml))
+        rows = service.execute(QueryRequest("mods")).as_dict()["data"]["entries"]
+        self.assertIsNone(rows[0]["display_name"])
+        self.assertEqual(rows[0]["field_status"], {"/display_name": "explicit_null"})
+        self.assertIsNone(rows[1]["package_id"])
+        self.assertEqual(rows[1]["field_status"], {"/package_id": "explicit_null"})
+        self.assertEqual(rows[1]["display_name"], "")
+        self.assertNotIn("/display_name", rows[1]["field_status"])
+
     def test_deadline_is_checked_at_eof_for_short_documents(self):
         class SlowReader(io.BytesIO):
             def read(self, size=-1):
