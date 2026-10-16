@@ -85,7 +85,7 @@ class QueryService:
             record.record_id: _collection_state(snapshot, record.source_path + "/things[1]")
             for record in self._records_by_type["map"]
         }
-        self._array_globals: list[tuple[str, str]] = []
+        self._array_globals: list[tuple[str, Any]] = []
         self._references_by_holder: dict[str, list[tuple[str, str]]] = defaultdict(list)
         self._metadata_globals: dict[str, tuple[str, Any]] = {}
         self._reference_memberships: dict[str, list[dict[str, Any]]] = {}
@@ -94,7 +94,7 @@ class QueryService:
             if "/li[" in path and any(marker in path for marker in (
                 "/innerList[", "/modIds[", "/modNames[", "/researchManager[",
             )):
-                self._array_globals.append((path, str(raw)))
+                self._array_globals.append((path, raw))
                 if "/innerList[" in path and path.rsplit("/", 1)[-1].startswith("li["):
                     self._references_by_holder[path.rsplit("/li[", 1)[0]].append((path, str(raw)))
             leaf = path.rsplit("/", 1)[-1].split("[", 1)[0]
@@ -271,12 +271,16 @@ class QueryService:
                 "snapshot_lifetime": self.snapshot_lifetime, "record_totals": totals, "scope_coverage": scopes,
                 "domain_availability": domains}
 
-    def _coverage(self, scope: str, *, force_partial: bool = False, include_holder: bool = False) -> dict[str, Any]:
+    def _coverage(self, scope: str, *, force_partial: bool = False, include_holder: bool = False,
+                  extra_diagnostics: tuple[Diagnostic, ...] = ()) -> dict[str, Any]:
         pawn_candidate_affects_scope = scope in {"map", "all_supported"}
         diagnostics = [d for d in self.snapshot.diagnostics
                        if d.code != "UNSUPPORTED_PAWN_CANDIDATE" or
                        scope == "all_supported" or scope == "map" and _is_direct_map_thing(d.source_path)]
         counts = dict(self.snapshot.diagnostic_counts)
+        for diagnostic in extra_diagnostics:
+            counts[diagnostic.code] = counts.get(diagnostic.code, 0) + 1
+            diagnostics.append(diagnostic)
         if scope == "map":
             if self.snapshot.direct_map_candidate_count:
                 counts["UNSUPPORTED_PAWN_CANDIDATE"] = self.snapshot.direct_map_candidate_count
@@ -674,36 +678,66 @@ class QueryService:
         keys = [v for _, v in key_pairs]
         vals = [v for _, v in value_pairs]
         rows: list[dict[str, Any]] = []
+        query_diagnostics: list[Diagnostic] = []
         if key_state == value_state == "present" and len(keys) == len(vals):
             for ordinal, (key, val) in enumerate(zip(keys, vals)):
+                key_path = key_pairs[ordinal][0]
+                value_path = value_pairs[ordinal][0]
+                key_status = self.snapshot.global_status.get(key_path)
+                value_status = self.snapshot.global_status.get(value_path)
                 if name == "mods":
-                    rows.append({"record_id": "mod:" + hashlib.sha256(key_pairs[ordinal][0].encode()).hexdigest(), "saved_id": key,
-                                 "source_path": key_pairs[ordinal][0], "field_status": {}, "raw_values": {}, "derivations": [],
+                    field_status = {}
+                    if key_status:
+                        field_status["/package_id"] = key_status
+                    if value_status:
+                        field_status["/display_name"] = value_status
+                    rows.append({"record_id": "mod:" + hashlib.sha256(key_path.encode()).hexdigest(), "saved_id": key,
+                                 "source_path": key_path, "field_status": field_status, "raw_values": {}, "derivations": [],
                                  "ordinal": ordinal, "package_id": key, "display_name": val,
-                                 "id_source_path": key_pairs[ordinal][0], "name_source_path": value_pairs[ordinal][0]})
+                                 "id_source_path": key_path, "name_source_path": value_path})
                 elif section == "progress":
-                    rows.append({"record_id": "research:" + hashlib.sha256(key_pairs[ordinal][0].encode()).hexdigest(), "saved_id": key,
-                                 "source_path": key_pairs[ordinal][0], "field_status": {}, "raw_values": {"/progress_points": val}, "derivations": [],
-                                 "ordinal": ordinal, "project_def": key, "progress_points": _coerce_float(val),
-                                 "key_source_path": key_pairs[ordinal][0], "value_source_path": value_pairs[ordinal][0]})
+                    normalized_value = None if value_status else _coerce_float(val)
+                    field_status = {"/project_def": key_status} if key_status else {}
+                    if value_status:
+                        field_status["/progress_points"] = value_status
+                    elif normalized_value is None:
+                        field_status["/progress_points"] = "invalid"
+                        query_diagnostics.append(Diagnostic("INVALID_VALUE", "warning", "invalid numeric value", value_path))
+                    rows.append({"record_id": "research:" + hashlib.sha256(key_path.encode()).hexdigest(), "saved_id": key,
+                                 "source_path": key_path, "field_status": field_status,
+                                 "raw_values": {"/progress_points": None if value_status == "explicit_null" else val}, "derivations": [],
+                                 "ordinal": ordinal, "project_def": key, "progress_points": normalized_value,
+                                 "key_source_path": key_path, "value_source_path": value_path})
                 else:
-                    rows.append({"record_id": "research:" + hashlib.sha256(key_pairs[ordinal][0].encode()).hexdigest(), "saved_id": key,
-                                 "source_path": key_pairs[ordinal][0], "field_status": {}, "raw_values": {"/techprint_count": val}, "derivations": [],
-                                 "ordinal": ordinal, "project_def": key, "techprint_count": _coerce_int(val),
-                                 "key_source_path": key_pairs[ordinal][0], "value_source_path": value_pairs[ordinal][0]})
+                    normalized_value = None if value_status else _coerce_int(val)
+                    field_status = {"/project_def": key_status} if key_status else {}
+                    if value_status:
+                        field_status["/techprint_count"] = value_status
+                    elif normalized_value is None:
+                        field_status["/techprint_count"] = "invalid"
+                        query_diagnostics.append(Diagnostic("INVALID_VALUE", "warning", "invalid integer value", value_path))
+                    rows.append({"record_id": "research:" + hashlib.sha256(key_path.encode()).hexdigest(), "saved_id": key,
+                                 "source_path": key_path, "field_status": field_status,
+                                 "raw_values": {"/techprint_count": None if value_status == "explicit_null" else val}, "derivations": [],
+                                 "ordinal": ordinal, "project_def": key, "techprint_count": normalized_value,
+                                 "key_source_path": key_path, "value_source_path": value_path})
             alignment = "paired"
         else:
             alignment = "unpaired"
-            rows.extend({"side": "key" if name == "research" else "id", "ordinal": i, "value": v, "source_path": p, "field_status": {}, "raw_values": {}, "derivations": []} for i, (p, v) in enumerate(key_pairs))
-            rows.extend({"side": "value" if name == "research" else "name", "ordinal": i, "value": v, "source_path": p, "field_status": {}, "raw_values": {}, "derivations": []} for i, (p, v) in enumerate(value_pairs))
+            rows.extend(self._unpaired_global("key" if name == "research" else "id", i, p, v)
+                        for i, (p, v) in enumerate(key_pairs))
+            rows.extend(self._unpaired_global("value" if name == "research" else "name", i, p, v)
+                        for i, (p, v) in enumerate(value_pairs))
         if name == "research" and "project_def" in filters:
             if alignment != "paired":
                 raise InspectorError("FILTER_UNAVAILABLE", "The research arrays are not positionally aligned.", snapshot_id=self.snapshot.snapshot_id)
             rows = [r for r in rows if r.get("project_def") == filters["project_def"]]
             normalized["project_def"] = filters["project_def"]
-        current = self._metadata_entry("/currentProj")[1] if name == "research" else None
+        current_path, current = self._metadata_entry("/currentProj") if name == "research" else (None, None)
+        current_status = self.snapshot.global_status.get(current_path) if current_path else "absent"
         collection_state = "present" if key_state == value_state == "present" else key_state if key_state != "present" else value_state
-        data = {"field_status": {}, "raw_values": {}, "derivations": [], "alignment": alignment,
+        data = {"field_status": {"/current_project": current_status} if name == "research" and current_status else {},
+                "raw_values": {}, "derivations": [], "alignment": alignment,
                 "collection_state": collection_state, "entries": rows}
         if name == "research":
             data.update({"current_project": current, "section": section,
@@ -712,12 +746,18 @@ class QueryService:
         else:
             data.update({"id_count": len(keys) if key_state == "present" else None,
                          "name_count": len(vals) if value_state == "present" else None})
-        return normalized, data, self._coverage("all_supported", force_partial=alignment == "unpaired" or collection_state != "present"), rows
+        return normalized, data, self._coverage("all_supported", force_partial=alignment == "unpaired" or collection_state != "present",
+                                                 extra_diagnostics=tuple(query_diagnostics)), rows
+
+    def _unpaired_global(self, side: str, ordinal: int, path: str, value: Any) -> dict[str, Any]:
+        status = self.snapshot.global_status.get(path)
+        return {"side": side, "ordinal": ordinal, "value": value, "source_path": path,
+                "field_status": {"/value": status} if status else {}, "raw_values": {}, "derivations": []}
 
     def _metadata_entry(self, suffix: str) -> tuple[str | None, Any]:
         return self._metadata_globals.get(re.sub(r"\[\d+\]", "", suffix), (None, None))
 
-    def _ordered_globals(self, marker: str) -> list[tuple[str, str]]:
+    def _ordered_globals(self, marker: str) -> list[tuple[str, Any]]:
         return sorted((pair for pair in self._array_globals if marker in pair[0]), key=lambda pair: _ordinal_key(pair[0]))
 
     def _page(self, query: QueryRequest, filters: dict[str, Any], data: dict[str, Any], rows: list[dict[str, Any]] | list[Record], limit: int) -> tuple[dict[str, Any], dict[str, Any]]:
