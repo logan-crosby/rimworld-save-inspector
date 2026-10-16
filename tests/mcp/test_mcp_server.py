@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 import anyio
 import pytest
@@ -140,7 +141,8 @@ def test_real_stdio_initialize_call_shutdown_has_protocol_only_stdout(tmp_path):
     async def run():
         commands = [
             (sys.executable, ["-m", "rimworld_save_inspector.cli", "mcp", "--save", str(save)]),
-            (str(__import__("pathlib").Path(__file__).parents[2] / ".venv/bin/rim-save-mcp"), ["--save", str(save)]),
+            (str(Path(sys.executable).absolute().parent / ("rim-save-mcp.exe" if sys.platform == "win32" else "rim-save-mcp")),
+             ["--save", str(save)]),
         ]
         for command, args in commands:
             params = StdioServerParameters(command=command, args=args,
