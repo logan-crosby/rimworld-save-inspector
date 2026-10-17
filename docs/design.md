@@ -378,6 +378,8 @@ Unknown parameters are rejected, not ignored. Filters are conjunctive. Exact sav
 
 Paging applies to pawns, pawn skills/traits, health, genes, equipment, inventory, research and mods. It does not apply to metadata, summary or pawn core. Passing limit/cursor to an unpaged query is INVALID_ARGUMENT. `guest_status=absent` selects missing tags; `guest_status=explicit_null` selects explicit null; other values match a stored status exactly. These selector tokens are documented reserved words. Filter diagnostics/partition counts must not classify missing status as a confirmed colonist.
 
+Equipment/apparel/inventory effective filters always include the boolean `estimate_missing_as_one`, including its default `false`; cursor identity must distinguish `true` from `false`. Inventory's root selector is reported as `holder_id:null`. Omitted estimation and explicit `false` are equivalent requests; a cursor cannot change the estimation rule partway through a list.
+
 Inspect data contains snapshot/interpretation identity, source bytes, game/profile versions, supported scopes, scope coverage, record totals by type, and domain availability. It does not enumerate every record. `snapshot_lifetime="process"` describes MCP behavior; CLI metadata uses `snapshot_lifetime="invocation"`, a documented transport metadata difference outside semantic comparison.
 
 CLI grammar:

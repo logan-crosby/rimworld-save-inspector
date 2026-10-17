@@ -140,8 +140,8 @@ def test_handwritten_examples_cover_each_success_variant_independently():
         "pawn_traits": ("pawn", {"record_id": record_id, "section": "traits"}, response_data["pawn_traits"], {"total": None, "returned": 0, "next_cursor": None}),
         "health": ("health", {"record_id": record_id}, response_data["health"], {"total": None, "returned": 0, "next_cursor": None}),
         "genes": ("genes", {"record_id": record_id, "group": "endogenes"}, response_data["genes"], {"total": None, "returned": 0, "next_cursor": None}),
-        "equipment": ("equipment", {"record_id": record_id, "holder": "equipment"}, response_data["equipment"], {"total": None, "returned": 0, "next_cursor": None}),
-        "inventory": ("inventory", {"record_id": record_id, "holder_id": None}, response_data["inventory"], {"total": None, "returned": 0, "next_cursor": None}),
+        "equipment": ("equipment", {"record_id": record_id, "holder": "equipment", "estimate_missing_as_one": False}, response_data["equipment"], {"total": None, "returned": 0, "next_cursor": None}),
+        "inventory": ("inventory", {"record_id": record_id, "holder_id": None, "estimate_missing_as_one": False}, response_data["inventory"], {"total": None, "returned": 0, "next_cursor": None}),
         "research": ("research", {"section": "progress"}, response_data["research"], {"total": None, "returned": 0, "next_cursor": None}),
         "mods": ("mods", {}, response_data["mods"], {"total": None, "returned": 0, "next_cursor": None}),
     }
