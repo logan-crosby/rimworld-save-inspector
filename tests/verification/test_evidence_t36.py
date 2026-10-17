@@ -30,11 +30,12 @@ from tools.gates.cases import CASES  # noqa: E402
 from tools.verify import (_artifact, _copy_performance_evidence, _evidence_shape_errors,
                           _g6_performance_report_binding_errors, _expected_packaging_check_ids,
                           _generic_manifest, _validate_generic_evidence,
+                          _packaged_candidate_report_errors, _t20_report_errors,
                           _package_report_case_is_complete, _prerequisite_evidence_satisfied,
                           _copy_packaging_report, _gate_failure_findings, _junit_testcase_matches,
                           _package_archive_errors, _producer_command_log_errors,
                           _review_receipt_errors, now, run_gate, run_g7_gate,
-                          validate_evidence, sha256)  # noqa: E402
+                          validate_evidence, sha256, write_g0_evidence)  # noqa: E402
 
 
 def _make_run(parent: Path) -> Path:
@@ -103,6 +104,101 @@ def _reseal(run: Path, state: str | None = None) -> None:
 
 
 class EvidenceTamperingTests(unittest.TestCase):
+    def test_g0_manifest_records_declared_v1_package_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "G0-public-only"
+            unavailable = SimpleNamespace(fixture=None, ready=False, errors=["synthetic private input unavailable"],
+                                          oracle=None, expected_bytes=None, expected_sha256=None,
+                                          input_hashes=lambda: {})
+            with patch("tools.verify.load_private_inputs", return_value=unavailable):
+                write_g0_evidence(run, fixture=None, actor="test:version-identity")
+            manifest = json.loads((run / "manifest.json").read_text())
+            self.assertEqual(manifest["candidate"]["package_version"], "1.0.0")
+            self.assertIsNone(manifest["candidate"]["parser_version"])
+            self.assertIsNone(manifest["candidate"]["profile_version"])
+            self.assertIn("pyproject.toml", {row["path"] for row in manifest["candidate"]["inputs"]})
+
+    def test_generated_candidate_versions_match_v1_metadata_and_reject_stale_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            manifest = _generic_manifest(run, "G1", "BLOCKED", now(), [], [], [], [], [])
+            candidate = manifest["candidate"]
+            self.assertEqual((candidate["package_version"], candidate["parser_version"], candidate["profile_version"]),
+                             ("1.0.0", "1.0.0", "rimworld-1.6/v1"))
+            self.assertFalse(any("candidate package/parser/profile version" in error for error in
+                                 _evidence_shape_errors(manifest, [], [], [])))
+            candidate["package_version"] = "0.1.0"
+            self.assertTrue(any("candidate package/parser/profile version" in error for error in
+                                _evidence_shape_errors(manifest, [], [], [])))
+            candidate["package_version"] = "1.0.0"
+            candidate["parser_version"] = None
+            self.assertTrue(any("candidate package/parser/profile version" in error for error in
+                                _evidence_shape_errors(manifest, [], [], [])))
+
+    def test_t20_runtime_package_identity_accepts_v1_and_rejects_stale_or_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            audit = run / "mcp-audit"
+            audit.mkdir()
+            observations = {}
+            for mode in ("cli", "mcp"):
+                observations[mode] = {"mode": mode, "error": None, "queries_completed": 1,
+                                      "writes_under_save_root": [], "network_attempts": [],
+                                      "source_hash_before": "a" * 64, "source_hash_after": "a" * 64,
+                                      "mode_before": 0o444, "mode_after": 0o444,
+                                      "runtime_package": {"version": "1.0.0",
+                                                          "file": str(ROOT / "src/rimworld_save_inspector/__init__.py")}}
+            observations["probe"] = {"writes_under_save_root": [{"kind": "write-open"}],
+                                      "network_attempts": [{"event": "socket.getaddrinfo"}]}
+            report = {"schema_version": 1, "case": "T20", "result": "pass",
+                      "expected": {"network_attempts": [], "probe_observer_detects_write_and_network": True,
+                                   "source_hash_preserved": True, "source_mode_preserved": True,
+                                   "writes_under_save_root": []},
+                      "observed": observations, "report_paths": ["cli.json", "mcp.json", "probe.json"]}
+            for mode in ("cli", "mcp", "probe"):
+                (audit / f"{mode}.json").write_text(json.dumps(observations[mode]))
+            self.assertEqual(_t20_report_errors(run, report), [])
+            observations["cli"]["runtime_package"]["version"] = "0.1.0"
+            (audit / "cli.json").write_text(json.dumps(observations["cli"]))
+            self.assertTrue(any("T20 cli runtime package identity" in error for error in
+                                _t20_report_errors(run, report)))
+            observations["cli"]["runtime_package"].pop("version")
+            (audit / "cli.json").write_text(json.dumps(observations["cli"]))
+            self.assertTrue(any("T20 cli runtime package identity" in error for error in
+                                _t20_report_errors(run, report)))
+
+    def test_g7_package_parser_and_installed_versions_accept_v1_not_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            report = {"schema_version": "1.0", "case_ids": ["T33", "T36", "T37"],
+                      "status": "PASS", "candidate": {"package_version": "1.0.0",
+                                                       "parser_version": "1.0.0",
+                                                       "profile_version": "rimworld-1.6/v1"},
+                      "install": {"installed_version": "1.0.0"}}
+            def version_errors() -> list[str]:
+                return [error for error in _packaged_candidate_report_errors(report, run)
+                        if "versions differ" in error or "installed package version" in error]
+            self.assertEqual(version_errors(), [])
+            report["candidate"]["package_version"] = "0.1.0"
+            report["install"]["installed_version"] = "0.1.0"
+            self.assertTrue(any("versions differ" in error for error in version_errors()))
+            self.assertTrue(any("installed package version" in error for error in version_errors()))
+            report["candidate"]["package_version"] = "1.0.0"
+            report["install"]["installed_version"] = None
+            self.assertTrue(any("installed package version" in error for error in version_errors()))
+            report["install"]["installed_version"] = "1.0.0"
+            report["candidate"]["parser_version"] = "0.1.0"
+            self.assertTrue(any("versions differ" in error for error in version_errors()))
+            report["candidate"]["parser_version"] = "1.0.0"
+            report["candidate"]["profile_version"] = None
+            self.assertTrue(any("versions differ" in error for error in version_errors()))
+            report["candidate"].update({"package_version": "2.0.0", "parser_version": "2.0.0",
+                                         "profile_version": "rimworld-1.6/v1"})
+            report["install"]["installed_version"] = "2.0.0"
+            with patch("tools.verify._release_identity", return_value=("2.0.0", "2.0.0", "rimworld-1.6/v1")):
+                self.assertTrue(any("versions differ" in error for error in version_errors()))
+                self.assertTrue(any("installed package version" in error for error in version_errors()))
+
     def test_rich_package_members_authenticate_exact_archive_contents(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)

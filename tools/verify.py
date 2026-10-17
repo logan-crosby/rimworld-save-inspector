@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import tomllib
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,35 @@ SPEC_REVISION = "2026-10-17.1"
 PUBLIC_SAMPLE_PATH = "examples/minimal_colony.rws"
 PUBLIC_SAMPLE_SHA256 = "f55d5e0741972f959b39029e26e6921c4d768bc5eb80c9726610b9ad85d3b7d7"
 PUBLIC_SAMPLE_BYTES = 1498
+V1_PACKAGE_VERSION = "1.0.0"
+V1_PROFILE_VERSION = "rimworld-1.6/v1"
+
+
+def _source_string_constant(relative: str, name: str) -> str | None:
+    """Read a release constant without importing the product into G0."""
+    try:
+        tree = ast.parse((ROOT / relative).read_text())
+    except (OSError, SyntaxError, UnicodeError):
+        return None
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == name
+                                                 for target in node.targets) and
+                isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)):
+            return node.value.value
+    return None
+
+
+def _release_identity() -> tuple[str | None, str | None, str | None]:
+    """Return independently declared metadata, package, and parser profile versions."""
+    try:
+        with (ROOT / "pyproject.toml").open("rb") as stream:
+            project = tomllib.load(stream).get("project", {})
+        package = project.get("version") if isinstance(project, dict) else None
+    except (OSError, tomllib.TOMLDecodeError):
+        package = None
+    return (package if isinstance(package, str) else None,
+            _source_string_constant("src/rimworld_save_inspector/__init__.py", "__version__"),
+            _source_string_constant("src/rimworld_save_inspector/parser/core.py", "PARSER_PROFILE"))
 
 
 def _private_identity() -> tuple[int | None, str | None]:
@@ -210,6 +240,14 @@ def _evidence_shape_errors(manifest: dict[str, Any], checks: Any, commands: Any,
     if not _is_sha(spec.get("sha256")) or spec.get("sha256") != sha256(SPEC):
         errors.append("spec hash does not match the checked-in normative document")
     candidate = manifest.get("candidate") if isinstance(manifest.get("candidate"), dict) else {}
+    declared_package, declared_parser, declared_profile = _release_identity()
+    if (candidate.get("package_version") != declared_package or declared_package != V1_PACKAGE_VERSION or
+            (manifest.get("gate_id") == "G0" and
+             (candidate.get("parser_version") is not None or candidate.get("profile_version") is not None)) or
+            (manifest.get("gate_id") != "G0" and
+             (candidate.get("parser_version") != declared_parser or declared_parser != V1_PACKAGE_VERSION or
+              candidate.get("profile_version") != declared_profile or declared_profile != V1_PROFILE_VERSION))):
+        errors.append("candidate package/parser/profile version differs from the committed v1 release identity")
     if not isinstance(candidate.get("dirty"), bool) or not isinstance(candidate.get("inputs"), list):
         errors.append("candidate dirty/inputs fields have invalid types")
     else:
@@ -304,6 +342,7 @@ def _resolve_inside(run: Path, relative: Any) -> Path | None:
 
 def _t20_report_errors(run: Path, report: Any) -> list[str]:
     errors: list[str] = []
+    declared_package, declared_parser, _ = _release_identity()
     if not isinstance(report, dict) or report.get("schema_version") != 1 or report.get("case") != "T20" or report.get("result") != "pass":
         return ["T20 audit manifest is missing, malformed, or not PASS"]
     expected = report.get("expected", {})
@@ -331,7 +370,8 @@ def _t20_report_errors(run: Path, report: Any) -> list[str]:
             errors.append(f"T20 {mode} source mode was not read-only and unchanged")
         runtime = item.get("runtime_package")
         runtime_file = runtime.get("file") if isinstance(runtime, dict) else None
-        if (not isinstance(runtime, dict) or runtime.get("version") != "0.1.0" or
+        if (not isinstance(runtime, dict) or runtime.get("version") != declared_package or
+                declared_package != declared_parser or declared_package != V1_PACKAGE_VERSION or
                 not isinstance(runtime_file, str) or not runtime_file):
             errors.append(f"T20 {mode} runtime package identity is missing")
         else:
@@ -642,8 +682,10 @@ def _packaged_candidate_report_errors(report: Any, run: Path) -> list[str]:
         errors.append("G7 Git tree OID differs from current candidate")
     if candidate.get("lock_sha256") != sha256(ROOT / "uv.lock") or candidate.get("pyproject_sha256") != sha256(ROOT / "pyproject.toml"):
         errors.append("G7 lock or package metadata hash differs from current candidate")
-    if (candidate.get("package_version") != "0.1.0" or candidate.get("parser_version") != "0.1.0" or
-            candidate.get("profile_version") != "rimworld-1.6/v1"):
+    declared_package, declared_parser, declared_profile = _release_identity()
+    if (candidate.get("package_version") != declared_package or declared_package != V1_PACKAGE_VERSION or
+            candidate.get("parser_version") != declared_parser or declared_parser != V1_PACKAGE_VERSION or
+            candidate.get("profile_version") != declared_profile or declared_profile != V1_PROFILE_VERSION):
         errors.append("G7 package/parser/profile versions differ from the declared candidate")
     inputs = candidate.get("inputs")
     if not isinstance(inputs, list):
@@ -800,7 +842,8 @@ def _packaged_candidate_report_errors(report: Any, run: Path) -> list[str]:
     else:
         if install.get("outside_checkout") is not True or install.get("source_shadowing") is not False:
             errors.append("G7 package was not verified outside checkout without source shadowing")
-        if install.get("installed_version") != candidate.get("package_version") or install.get("installed_version") != "0.1.0":
+        if (install.get("installed_version") != candidate.get("package_version") or
+                install.get("installed_version") != declared_package or declared_package != V1_PACKAGE_VERSION):
             errors.append("G7 installed package version differs from the candidate")
         if install.get("wheel_sha256") != next((row.get("sha256") for row in archives if isinstance(row, dict) and row.get("kind") == "wheel"), None):
             errors.append("G7 installed wheel hash does not match the audited candidate wheel")
@@ -1800,6 +1843,7 @@ def write_g0_evidence(run: Path, *, fixture: Path | None, actor: str, oracle_res
     dirty = bool(git("status", "--porcelain"))
     candidate_inputs = []
     for file, role in ((SPEC, "spec"), (CATALOG, "oracle"), (EVIDENCE_SCHEMA, "schema"),
+                       (ROOT / "pyproject.toml", "config"),
                        (ROOT / "tools/private_acceptance.py", "config"),
                        (ORACLE, "oracle"), (ROOT / "tests/oracle/test_g0.py", "test"),
                        (ROOT / "tests/fixtures/synthetic/seed.rws", "test"),
@@ -1827,7 +1871,7 @@ def write_g0_evidence(run: Path, *, fixture: Path | None, actor: str, oracle_res
         "started_at": started, "finished_at": now(), "actor": actor,
         "spec": {"id": "RWSI-1.0", "revision": SPEC_REVISION, "sha256": sha256(SPEC)},
         "candidate": {"commit": commit, "dirty": dirty, "inputs": candidate_inputs, "lock_sha256": None,
-                      "package_version": "0.1.0", "parser_version": None, "profile_version": None},
+                      "package_version": _release_identity()[0], "parser_version": None, "profile_version": None},
         "environment": {"os": platform.platform(), "architecture": platform.machine(), "hardware": platform.processor() or platform.machine(),
                         "python_executable": sys.executable, "python_version": platform.python_version(), "dependencies": {"stdlib_xml": "xml.etree.ElementTree"}},
         "fixture": {"label": "private fixture", "available": bool(selected and selected.is_file()), "expected_bytes": private.expected_bytes,
@@ -2595,12 +2639,14 @@ def _generic_manifest(run: Path, gate: str, state: str, started: str, checks: li
     fixture_hash = sha256(fixture_path) if fixture_path and fixture_path.is_file() else None
     fixture_bytes = fixture_path.stat().st_size if fixture_path and fixture_path.is_file() else None
     statuses = [row["status"] for row in checks]
+    declared_package, declared_parser, declared_profile = _release_identity()
     return {"schema_version": "1.0", "run_id": run.name, "gate_id": gate, "status": state,
             "started_at": started, "finished_at": now(), "actor": f"local:{os.environ.get('CODEX_THREAD_ID', 'unavailable')}",
             "spec": {"id": "RWSI-1.0", "revision": SPEC_REVISION, "sha256": sha256(SPEC)},
             "candidate": {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain")),
                           "inputs": inputs, "lock_sha256": sha256(ROOT / "uv.lock") if (ROOT / "uv.lock").exists() else None,
-                          "package_version": "0.1.0", "parser_version": "0.1.0", "profile_version": "rimworld-1.6/v1"},
+                          "package_version": declared_package, "parser_version": declared_parser,
+                          "profile_version": declared_profile},
             "environment": {"os": platform.platform(), "architecture": platform.machine(), "hardware": platform.processor() or platform.machine(),
                             "python_executable": sys.executable, "python_version": platform.python_version(), "dependencies": {}},
             "fixture": {"label": "private fixture", "available": fixture_hash is not None,
