@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from rimworld_save_inspector.models import QueryRequest
+from rimworld_save_inspector.errors import InspectorError
 from rimworld_save_inspector.service import QueryService
 from rimworld_save_inspector.source import load_snapshot
 
@@ -83,9 +84,7 @@ def test_child_collection_availability_is_distinct_from_zero(
         assert skills["coverage"]["diagnostic_counts"].get("INVALID_VALUE")
 
 
-@pytest.mark.parametrize(
-    ("kind", "prefix", "tag", "suffix", "entry", "name", "extra"),
-    [
+_DOMAIN_CASES = [
         ("skills", b"<skills>", b"skills", b"</skills>", b"<li><def>Shooting</def><level>bad</level></li>", "pawn", {"section": "skills"}),
         ("traits", b"<story><traits>", b"allTraits", b"</traits></story>", b"<li><def>Tough</def></li>", "pawn", {"section": "traits"}),
         ("hediffs", b"<healthTracker><hediffSet>", b"hediffs", b"</hediffSet></healthTracker>", b"<li><def>Cut</def></li>", "health", {}),
@@ -94,8 +93,10 @@ def test_child_collection_availability_is_distinct_from_zero(
         ("equipment", b"<equipment><equipment>", b"innerList", b"</equipment></equipment>", b"<li><id>R</id><def>Rifle</def></li>", "equipment", {"holder": "equipment"}),
         ("apparel", b"<apparel><wornApparel>", b"innerList", b"</wornApparel></apparel>", b"<li><id>H</id><def>Hat</def></li>", "equipment", {"holder": "apparel"}),
         ("inventory", b"<inventory><innerContainer>", b"innerList", b"</innerContainer></inventory>", b"<li><id>M</id><def>Medicine</def></li>", "inventory", {}),
-    ],
-)
+]
+
+
+@pytest.mark.parametrize(("kind", "prefix", "tag", "suffix", "entry", "name", "extra"), _DOMAIN_CASES)
 @pytest.mark.parametrize(("variant", "state", "count"), [
     ("absent", "absent", None), ("null", "explicit_null", None),
     ("invalid", "invalid", None), ("empty", "present", 0), ("one", "present", 1),
@@ -120,6 +121,53 @@ def test_all_child_domains_count_only_available_immediate_entries(
     assert len(domain["data"]["entries"]) == (count or 0)
     if variant == "invalid":
         assert domain["coverage"]["diagnostic_counts"].get("INVALID_VALUE")
+
+
+@pytest.mark.parametrize(("kind", "prefix", "tag", "suffix", "entry", "name", "extra"), _DOMAIN_CASES)
+@pytest.mark.parametrize("level", ["inner", "parent"])
+def test_duplicate_singleton_wrappers_are_unavailable_and_diagnosed(
+    kind: str, prefix: bytes, tag: bytes, suffix: bytes, entry: bytes,
+    name: str, extra: dict[str, str], level: str,
+) -> None:
+    inner = b"<" + tag + b">" + entry + b"</" + tag + b">"
+    if level == "inner":
+        fragment = prefix + inner + inner + suffix
+    else:
+        fragment = (prefix + inner + suffix) * 2
+    service, record_id = _pawn_service(fragment)
+    core = _query(service, "pawn", record_id=record_id)["data"]["pawn"]
+    domain = _query(service, name, record_id=record_id, **extra)
+    assert core["child_counts"][kind] is None
+    assert domain["data"]["collection_state"] == "invalid"
+    assert domain["data"]["entries"] == []
+    assert domain["page"]["total"] is None
+    assert domain["coverage"]["status"] == "partial"
+    assert domain["coverage"]["diagnostic_counts"].get("DUPLICATE_SINGLETON")
+
+
+def test_repeated_li_entries_remain_distinct_known_entries() -> None:
+    service, record_id = _pawn_service(
+        b"<skills><skills><li><def>A</def></li><li><def>A</def></li></skills></skills>")
+    counts = _query(service, "pawn", record_id=record_id)["data"]["pawn"]["child_counts"]
+    skills = _query(service, "pawn", record_id=record_id, section="skills")
+    assert counts["skills"] == 2
+    assert skills["data"]["collection_state"] == "present"
+    assert skills["page"]["total"] == 2
+    assert [row["skill_def"] for row in skills["data"]["entries"]] == ["A", "A"]
+    assert "DUPLICATE_SINGLETON" not in skills["coverage"]["diagnostic_counts"]
+
+
+def test_reviewed_two_skills_wrappers_do_not_publish_only_first_entry() -> None:
+    service, record_id = _pawn_service(
+        b"<skills><skills><li><def>A</def></li></skills>"
+        b"<skills><li><def>B</def></li></skills></skills>")
+    core = _query(service, "pawn", record_id=record_id)["data"]["pawn"]
+    skills = _query(service, "pawn", record_id=record_id, section="skills")
+    assert core["child_counts"]["skills"] is None
+    assert skills["data"]["collection_state"] == "invalid"
+    assert skills["data"]["entries"] == []
+    assert skills["page"]["total"] is None
+    assert skills["coverage"]["diagnostic_counts"]["DUPLICATE_SINGLETON"] == 1
 
 
 @pytest.mark.parametrize(("kind", "fragment", "name", "extra"), [
@@ -230,6 +278,53 @@ def test_present_empty_maps_has_known_zero_roster() -> None:
     assert roster["data"]["collection_state"] == "present"
     assert roster["data"]["entries"] == []
     assert roster["page"]["total"] == 0
+
+
+def test_duplicate_maps_collection_is_unavailable_and_diagnosed() -> None:
+    xml = b"""<savegame><game>
+      <maps><li><uniqueID>0</uniqueID><things><thing Class='Pawn'><id>A</id><def>Human</def></thing></things></li></maps>
+      <maps><li><uniqueID>1</uniqueID><things><thing Class='Pawn'><id>B</id><def>Human</def></thing></things></li></maps>
+    </game></savegame>"""
+    service = _service(xml)
+    summary = _query(service, "summary")
+    roster = _query(service, "pawns")
+    assert summary["data"]["maps_state"] == "invalid"
+    assert summary["data"]["map_count"] is None
+    assert summary["data"]["maps"] == []
+    assert roster["data"]["collection_state"] == "invalid"
+    assert roster["data"]["entries"] == []
+    assert roster["page"]["total"] is None
+    assert roster["coverage"]["diagnostic_counts"].get("DUPLICATE_SINGLETON")
+    for name in ("summary", "pawns"):
+        with pytest.raises(InspectorError) as error:
+            _query(service, name, map_id="0")
+        assert error.value.code == "FILTER_UNAVAILABLE"
+
+
+def test_duplicate_things_collection_invalidates_only_its_map_roster() -> None:
+    xml = b"""<savegame><game><maps>
+      <li><uniqueID>0</uniqueID><things><thing Class='Pawn'><id>A</id><def>Human</def></thing></things>
+        <things><thing Class='Pawn'><id>B</id><def>Human</def></thing></things></li>
+      <li><uniqueID>1</uniqueID><things><thing Class='Pawn'><id>C</id><def>Human</def></thing></things></li>
+    </maps></game></savegame>"""
+    service = _service(xml)
+    summary = _query(service, "summary")
+    assert summary["data"]["maps"][0]["things_state"] == "invalid"
+    assert summary["data"]["maps"][0]["direct_pawn_count"] is None
+    selected_bad = _query(service, "pawns", map_id="0")
+    assert selected_bad["data"]["collection_state"] == "invalid"
+    assert selected_bad["data"]["entries"] == []
+    assert selected_bad["page"]["total"] is None
+    selected_good = _query(service, "pawns", map_id="1")
+    assert selected_good["data"]["collection_state"] == "present"
+    assert selected_good["page"]["total"] == 1
+    assert [entry["saved_id"] for entry in selected_good["data"]["entries"]] == ["C"]
+    union = _query(service, "pawns")
+    assert union["data"]["collection_state"] == "present"
+    assert union["page"]["total"] is None
+    assert [entry["saved_id"] for entry in union["data"]["entries"]] == ["C"]
+    assert union["coverage"]["diagnostic_counts"].get("DUPLICATE_SINGLETON")
+    assert union["coverage"]["diagnostic_counts"].get("MISSING_COLLECTION") == 1
 
 
 @pytest.mark.parametrize(("maps_markup", "expected_state"), [

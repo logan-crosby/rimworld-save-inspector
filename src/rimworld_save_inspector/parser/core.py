@@ -299,7 +299,16 @@ class _Handler(ContentHandler):
     def _mark_collections(self, path: str, is_null: str | None) -> None:
         tag = self.frames[-1].tag
         if tag in _COLLECTION_NAMES:
-            self.collections[path] = "explicit_null" if is_null == "True" else "present"
+            parent = self.frames[-2] if len(self.frames) > 1 else None
+            if parent is not None and parent.counts is not None and parent.counts[tag] > 1:
+                # A collection wrapper is a singleton at its parent. The
+                # second sibling makes the first source ambiguous as well;
+                # retain both paths but publish neither as a known collection.
+                self.collections[parent.path + f"/{tag}[1]"] = "invalid"
+                self.collections[path] = "invalid"
+                self._diagnostic("DUPLICATE_SINGLETON", path=path)
+            else:
+                self.collections[path] = "explicit_null" if is_null == "True" else "present"
 
     def characters(self, content: str) -> None:
         self._check()

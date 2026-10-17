@@ -355,9 +355,9 @@ class QueryService:
         map_id = filters.get("map_id")
         normalized = {"map_id": map_id} if map_id is not None else {}
         if map_id is not None:
-            matches = [m for m in maps if m.saved_id == map_id]
-            if not matches and maps_state != "present":
+            if maps_state != "present":
                 raise InspectorError("FILTER_UNAVAILABLE", "The map identity collection is incomplete.", snapshot_id=self.snapshot.snapshot_id)
+            matches = [m for m in maps if m.saved_id == map_id]
             if not matches:
                 raise InspectorError("MAP_NOT_FOUND", "No map matches the requested saved ID.", snapshot_id=self.snapshot.snapshot_id)
             if len(matches) > 1:
@@ -429,10 +429,12 @@ class QueryService:
         if filters.get("faction") == "player" and self._player_faction.status != "resolved":
             raise InspectorError("PLAYER_FACTION_UNRESOLVED", "The player faction could not be uniquely resolved.", snapshot_id=self.snapshot.snapshot_id)
         if scope == "map" and filters.get("map_id") is not None:
+            state = self.snapshot.collection_states.get("/savegame[1]/game[1]/maps[1]", "absent")
+            if state != "present":
+                raise InspectorError("FILTER_UNAVAILABLE", "The map identity collection is incomplete.", snapshot_id=self.snapshot.snapshot_id)
             maps = [m for m in self._records_by_type["map"] if m.saved_id == filters["map_id"]]
             if not maps:
-                state = self.snapshot.collection_states.get("/savegame[1]/game[1]/maps[1]", "absent")
-                raise InspectorError("FILTER_UNAVAILABLE" if state != "present" else "MAP_NOT_FOUND", "The requested map is unavailable.", snapshot_id=self.snapshot.snapshot_id)
+                raise InspectorError("MAP_NOT_FOUND", "The requested map is unavailable.", snapshot_id=self.snapshot.snapshot_id)
             if len(maps) > 1:
                 raise InspectorError("AMBIGUOUS_MAP", "More than one map has the requested saved ID.", snapshot_id=self.snapshot.snapshot_id)
             chosen_map = maps[0]
