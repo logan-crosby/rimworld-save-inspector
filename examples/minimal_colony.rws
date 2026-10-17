@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<savegame>
+  <meta>
+    <gameVersion>1.6.1</gameVersion>
+  </meta>
+  <game>
+    <maps>
+      <li>
+        <uniqueID>1</uniqueID>
+        <parent>Example Base</parent>
+        <things>
+          <thing Class="Pawn">
+            <id>Human_Example_1</id>
+            <def>Human</def>
+            <name>
+              <first>Alex</first>
+              <nick>Alex</nick>
+              <last>Example</last>
+            </name>
+            <equipment>
+              <equipment>
+                <innerList>
+                  <li><id>Weapon_Example_1</id><def>Gun</def><stackCount>1</stackCount></li>
+                </innerList>
+              </equipment>
+            </equipment>
+            <apparel>
+              <wornApparel>
+                <innerList>
+                  <li><id>Apparel_Example_1</id><def>Jacket</def><stackCount>1</stackCount></li>
+                </innerList>
+              </wornApparel>
+            </apparel>
+            <inventory>
+              <innerContainer>
+                <innerList>
+                  <li><id>Item_Example_1</id><def>Medicine</def><stackCount>2</stackCount></li>
+                </innerList>
+              </innerContainer>
+            </inventory>
+          </thing>
+          <thing Class="Pawn">
+            <id>Human_Example_2</id>
+            <def>Human</def>
+            <name><first>Casey</first><last>Example</last></name>
+          </thing>
+        </things>
+      </li>
+    </maps>
+  </game>
+</savegame>

@@ -123,7 +123,7 @@ def load_snapshot(source: Path, *, limits: ParseLimits | None = None, cancel: th
             raise InspectorError("SOURCE_CHANGED", "The source path changed while it was being parsed.")
         digest = reader.digest.hexdigest()
         snapshot_id = f"sha256:{digest}"
-        parser_version, profile_version = "0.1.0", parsed.profile_version
+        parser_version, profile_version = "1.0.0", parsed.profile_version
         interpretation = hashlib.sha256(f"{snapshot_id}\n{parser_version}\n{profile_version}".encode("utf-8")).hexdigest()
         return Snapshot(
             snapshot_id=snapshot_id,
