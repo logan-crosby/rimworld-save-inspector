@@ -9,11 +9,16 @@ from __future__ import annotations
 
 import json
 import ast
+import hashlib
+import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
+import tarfile
 import unittest
+import zipfile
+from io import BytesIO
 from unittest.mock import patch
 from pathlib import Path
 
@@ -23,7 +28,9 @@ sys.path.insert(0, str(ROOT))
 from tools.gates.cases import CASES  # noqa: E402
 from tools.verify import (_artifact, _copy_performance_evidence, _expected_packaging_check_ids,
                           _generic_manifest, _package_report_case_is_complete, _prerequisite_evidence_satisfied,
-                          _copy_packaging_report, _gate_failure_findings, _review_receipt_errors, now, run_gate, run_g7_gate,
+                          _copy_packaging_report, _gate_failure_findings, _junit_testcase_matches,
+                          _package_archive_errors, _producer_command_log_errors,
+                          _review_receipt_errors, now, run_gate, run_g7_gate,
                           validate_evidence, sha256)  # noqa: E402
 
 
@@ -93,6 +100,133 @@ def _reseal(run: Path, state: str | None = None) -> None:
 
 
 class EvidenceTamperingTests(unittest.TestCase):
+    def test_rich_package_members_authenticate_exact_archive_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            wheel = run / "sample.whl"
+            sdist = run / "sample.tar.gz"
+            payloads = {"sample/__init__.py": b"version = 1\n", "sample/module.py": b"value = 2\n"}
+            with zipfile.ZipFile(wheel, "w") as archive:
+                for name, payload in payloads.items():
+                    archive.writestr(name, payload)
+            with tarfile.open(sdist, "w:gz") as archive:
+                for name, payload in payloads.items():
+                    info = tarfile.TarInfo(name)
+                    info.size = len(payload)
+                    archive.addfile(info, BytesIO(payload))
+            members = [{"path": name, "bytes": len(payload),
+                        "sha256": hashlib.sha256(payload).hexdigest()}
+                       for name, payload in sorted(payloads.items())]
+            entries = [{"path": path.name, "bytes": path.stat().st_size, "sha256": sha256(path),
+                        "members": json.loads(json.dumps(members))} for path in (wheel, sdist)]
+            self.assertEqual(_package_archive_errors(run, {"artifacts": entries}), [])
+
+            for mutation in ("tampered", "missing", "duplicate", "misclassified"):
+                with self.subTest(mutation=mutation):
+                    changed = json.loads(json.dumps(entries))
+                    rows = changed[0]["members"]
+                    if mutation == "tampered":
+                        rows[0]["sha256"] = "0" * 64
+                    elif mutation == "missing":
+                        rows.pop()
+                    elif mutation == "duplicate":
+                        rows.append(dict(rows[0]))
+                    else:
+                        rows[0]["path"] = "sample/wrong.py"
+                    self.assertTrue(_package_archive_errors(run, {"artifacts": changed}))
+
+    def test_producer_command_logs_require_unique_paths_and_matching_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            commands_dir = run / "packaged-candidate" / "commands"
+            commands_dir.mkdir(parents=True)
+            outputs = {}
+            for command_id in ("first", "second"):
+                for stream in ("stdout", "stderr"):
+                    relative = f"commands/{command_id}.{stream}.txt"
+                    path = commands_dir / f"{command_id}.{stream}.txt"
+                    path.write_text(f"{command_id} {stream}\n")
+                    outputs[relative] = {"path": relative, "bytes": path.stat().st_size,
+                                         "sha256": sha256(path)}
+            commands = [{"command_id": command_id, "exit_code": 0, "timed_out": False,
+                         **{f"{stream}_path": f"commands/{command_id}.{stream}.txt" for stream in ("stdout", "stderr")},
+                         **{f"{stream}_sha256": outputs[f"commands/{command_id}.{stream}.txt"]["sha256"]
+                            for stream in ("stdout", "stderr")}}
+                        for command_id in ("first", "second")]
+            self.assertEqual(_producer_command_log_errors(commands, outputs, run), [])
+
+            for mutation in ("missing", "tampered", "duplicate-id", "reused-path", "misclassified-stream"):
+                with self.subTest(mutation=mutation):
+                    changed = json.loads(json.dumps(commands))
+                    index = json.loads(json.dumps(outputs))
+                    if mutation == "missing":
+                        index.pop(changed[0]["stdout_path"])
+                    elif mutation == "tampered":
+                        changed[0]["stdout_sha256"] = "0" * 64
+                    elif mutation == "duplicate-id":
+                        changed[1]["command_id"] = changed[0]["command_id"]
+                    elif mutation == "reused-path":
+                        changed[1]["stdout_path"] = changed[0]["stdout_path"]
+                        changed[1]["stdout_sha256"] = changed[0]["stdout_sha256"]
+                    else:
+                        changed[0]["stderr_path"] = changed[0]["stdout_path"]
+                        changed[0]["stderr_sha256"] = changed[0]["stdout_sha256"]
+                    self.assertTrue(_producer_command_log_errors(changed, index, run))
+
+    def test_junit_mapping_uses_exact_module_class_and_function_identity(self) -> None:
+        # This classname/name pair is retained verbatim from the failed G2 run's
+        # JUnit record for the corrected T16 mapped class method.
+        t16_node = ("tests/unit/test_core_contract.py::ReferenceAndPagingTests::"
+                    "test_deadline_is_checked_at_eof_for_short_documents")
+        actual_class_case = {
+            "classname": "tests.unit.test_core_contract.ReferenceAndPagingTests",
+            "name": "test_deadline_is_checked_at_eof_for_short_documents",
+        }
+        self.assertTrue(_junit_testcase_matches(t16_node, actual_class_case))
+        self.assertFalse(_junit_testcase_matches(t16_node, {
+            **actual_class_case, "classname": "tests.unit.test_core_contract.OtherTests"
+        }))
+        self.assertFalse(_junit_testcase_matches(t16_node, {
+            **actual_class_case,
+            "classname": "tests.unit.test_core_contract_shadow.ReferenceAndPagingTests",
+        }))
+        g7_node = ("tests/integration/test_private_equivalence.py::PrivateEquivalenceTests::"
+                   "test_product_matches_frozen_f01_f28_and_dynamic_d01_d03")
+        self.assertTrue(_junit_testcase_matches(g7_node, {
+            "classname": "tests.integration.test_private_equivalence.PrivateEquivalenceTests",
+            "name": "test_product_matches_frozen_f01_f28_and_dynamic_d01_d03",
+        }))
+        self.assertFalse(_junit_testcase_matches(g7_node, {
+            "classname": "tests.integration.test_private_equivalence.OtherTests",
+            "name": "test_product_matches_frozen_f01_f28_and_dynamic_d01_d03",
+        }))
+
+        function_node = ("tests/contract/test_cli_schema.py::"
+                         "test_handwritten_contract_examples_validate_and_reject_unknown_fields")
+        self.assertTrue(_junit_testcase_matches(function_node, {
+            "classname": "tests.contract.test_cli_schema",
+            "name": "test_handwritten_contract_examples_validate_and_reject_unknown_fields",
+        }))
+        self.assertFalse(_junit_testcase_matches(function_node, {
+            "classname": "tests.contract.test_cli_schema.ShadowTests",
+            "name": "test_handwritten_contract_examples_validate_and_reject_unknown_fields",
+        }))
+
+    def test_validator_rejects_junit_case_from_wrong_module(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = _make_run(Path(directory))
+            junit_path = run / "pytest.junit.xml"
+            junit = junit_path.read_text()
+            junit = junit.replace(
+                'classname="tests.contract.test_cli_schema"',
+                'classname="tests.contract.test_cli_schema_shadow"', 1,
+            )
+            junit_path.write_text(junit)
+            _reseal(run, "BLOCKED")
+
+            errors = validate_evidence(run)
+            self.assertTrue(any("JUnit output omits mapped test" in error for error in errors), errors)
+
     def test_every_mapped_case_node_resolves_to_a_test_definition(self) -> None:
         missing: list[str] = []
         for case_id, case in CASES.items():
@@ -517,18 +651,40 @@ class EvidenceTamperingTests(unittest.TestCase):
             self.assertIsNone(report_path)
             self.assertFalse((escaped_run / "performance-formal").exists())
 
-    def test_current_performance_report_authenticates_formal006_and_records_strict_failure(self) -> None:
-        report = (ROOT / "briefs/performance-report.md").read_text()
-        hashes = report.split("Provenance hashes:", 1)[-1]
-        for relative in ("src/rimworld_save_inspector/parser/core.py",
-                         "src/rimworld_save_inspector/service.py",
-                         "tools/performance/benchmark_core.py"):
-            with self.subTest(path=relative):
-                self.assertIn(f"{relative} `{sha256(ROOT / relative)}`", hashes)
-        self.assertIn("evidence/performance-formal-006", report)
-        self.assertIn("Formal-006 strict result: FAIL", report)
-        self.assertIn("527,627,375 ns", report)
-        self.assertIn("250,000,000 ns", report)
+    def test_t35_rejects_stale_provenance_before_private_fixture_access(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            core_path = root / "src/rimworld_save_inspector/parser/core.py"
+            service_path = root / "src/rimworld_save_inspector/service.py"
+            benchmark_path = root / "tools/performance/benchmark_core.py"
+            for path in (core_path, service_path, benchmark_path):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(f"synthetic source: {path.name}\n")
+            report_path = root / "performance-report.md"
+            report_path.write_text(
+                "Provenance hashes:\n"
+                "src/rimworld_save_inspector/parser/core.py `" + "0" * 64 + "`\n"
+                f"src/rimworld_save_inspector/service.py `{sha256(service_path)}`\n"
+                f"tools/performance/benchmark_core.py `{sha256(benchmark_path)}`\n"
+            )
+            evidence = root / "formal-workers"
+            evidence.mkdir()
+            self.assertFalse((root / ".private/private-fixture.rws").exists())
+
+            test_file = ROOT / "tests/reliability/test_performance_report.py"
+            spec = importlib.util.spec_from_file_location("t36_performance_report_test", test_file)
+            self.assertIsNotNone(spec)
+            self.assertIsNotNone(spec.loader)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            test_case = module.PerformanceEvidenceTests()
+            with patch.object(module, "ROOT", root), patch.dict(os.environ, {
+                    "RWSI_PERFORMANCE_RUN": str(evidence),
+                    "RWSI_PERFORMANCE_REPORT": str(report_path)}):
+                with self.assertRaisesRegex(AssertionError, "formal timings are stale for changed input") as caught:
+                    test_case.test_formal_three_worker_report_matches_current_core_and_thresholds()
+
+            self.assertNotIn("private reference fixture is required", str(caught.exception))
 
 
 if __name__ == "__main__":
