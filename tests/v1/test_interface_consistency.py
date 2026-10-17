@@ -17,11 +17,13 @@ import sys
 import tempfile
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from rimworld_save_inspector.errors import InspectorError
 from rimworld_save_inspector.models import QueryRequest
 from rimworld_save_inspector.service import QueryService
 from rimworld_save_inspector.source import load_snapshot
+from rimworld_save_inspector.schemas import SUCCESS_SCHEMAS
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -275,6 +277,69 @@ def test_repeated_item_references_do_not_multiply_unique_stack_units(surface):
     assert len(refs) == 3
     assert refs[0]["reference"]["target_record_ids"] == refs[1]["reference"]["target_record_ids"]
     assert refs[2]["reference"]["status"] == "unresolved"
+
+
+def test_ambiguous_item_candidates_cannot_add_units_across_python_cli_mcp(tmp_path):
+    """Only full records owned by the selected holder plus uniquely resolved refs count."""
+    xml = b"""<savegame><meta><gameVersion>1.6.4871 rev591</gameVersion></meta><game>
+<maps><li><uniqueID>0</uniqueID><things>
+<thing Class='Pawn'><id>A</id><def>Human</def><inventory><innerContainer><innerList>
+<li>Thing_SharedItem</li><li>Thing_SharedItem</li>
+</innerList></innerContainer></inventory></thing>
+<thing Class='Pawn'><id>AOwn</id><def>Human</def><inventory><innerContainer><innerList>
+<li><id>SharedItem</id><def>Medicine</def><stackCount>8</stackCount></li><li>Thing_SharedItem</li>
+</innerList></innerContainer></inventory></thing>
+<thing Class='Pawn'><id>B</id><def>Human</def><inventory><innerContainer><innerList>
+<li><id>SharedItem</id><def>Medicine</def><stackCount>4</stackCount></li>
+</innerList></innerContainer></inventory></thing>
+<thing Class='Pawn'><id>C</id><def>Human</def><inventory><innerContainer><innerList>
+<li><id>SharedItem</id><def>Medicine</def><stackCount>6</stackCount></li>
+</innerList></innerContainer></inventory></thing>
+</things></li></maps></game></savegame>"""
+    source = tmp_path / "synthetic-ambiguous-items.rws"
+    source.write_bytes(xml)
+    snapshot = load_snapshot(source)
+    service = QueryService(snapshot)
+    pawn_ids = {
+        record.saved_id: record.record_id
+        for record in snapshot.records if record.type_name == "pawn"
+    }
+    expected_units = {"A": 0, "AOwn": 8}
+    expected_owned_records = {"A": 0, "AOwn": 1}
+    expected_unresolved_refs = {"A": 2, "AOwn": 1}
+    expected_by_transport = {}
+    for saved_id, record_id in (("A", pawn_ids["A"]), ("AOwn", pawn_ids["AOwn"])):
+        filters = {"record_id": record_id, "estimate_missing_as_one": True}
+        expected = service.execute(QueryRequest("inventory", filters)).as_dict()
+        data = expected["data"]
+        assert data["quantity"]["explicit_stack_units"] == expected_units[saved_id]
+        assert data["resolved_item_count"] == expected_owned_records[saved_id]
+        assert data["quantity"]["unresolved_item_entries"] == expected_unresolved_refs[saved_id]
+        assert data["quantity"]["estimated_stack_units"] is None
+        refs = [entry for entry in data["entries"] if entry["entry_kind"] == "reference"]
+        assert len(refs) == expected_unresolved_refs[saved_id]
+        assert all(entry["reference"]["status"] == "ambiguous" for entry in refs)
+        assert all(len(entry["reference"]["target_record_ids"]) >= 2 for entry in refs)
+
+        cli = _cli(source, "inventory", record_id, "--estimate-missing-as-one")
+        expected_by_transport[saved_id] = expected
+        assert _canonical(cli) == _canonical(expected), ("CLI", saved_id)
+        Draft202012Validator(SUCCESS_SCHEMAS["inventory"]).validate(expected)
+        Draft202012Validator(SUCCESS_SCHEMAS["inventory"]).validate(cli)
+
+    async def compare_mcp():
+        async with _mcp_session(source) as (session, _server_stderr):
+            inspected = _mcp_value(await session.call_tool("inspect_save", {}))
+            for saved_id in ("A", "AOwn"):
+                response = _mcp_value(await session.call_tool("get_inventory", {
+                    "snapshot_id": inspected["snapshot_id"],
+                    "record_id": pawn_ids[saved_id],
+                    "estimate_missing_as_one": True,
+                }))
+                assert _canonical(response) == _canonical(expected_by_transport[saved_id]), ("MCP", saved_id)
+                Draft202012Validator(SUCCESS_SCHEMAS["inventory"]).validate(response)
+
+    asyncio.run(compare_mcp())
 
 
 def test_nested_holder_selector_is_owned_and_cross_pawn_holder_is_rejected(surface):
