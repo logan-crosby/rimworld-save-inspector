@@ -217,6 +217,12 @@ def _evidence_shape_errors(manifest: dict[str, Any], checks: Any, commands: Any,
             if not isinstance(item, dict) or set(item) != {"path", "role", "sha256"} or not _safe_relative(item.get("path")) or item.get("role") not in {"source", "test", "oracle", "schema", "spec", "lock", "config"} or not _is_sha(item.get("sha256")):
                 errors.append("candidate input does not match evidence schema")
                 continue
+            # G6's selected report is retained inside its evidence run. Its
+            # source may be an ignored private file and need not exist when
+            # the evidence is validated later; the G6 binding check below
+            # authenticates the retained bytes against both indexes.
+            if manifest.get("gate_id") == "G6" and item["path"] == "performance-report.md":
+                continue
             path = ROOT / item["path"]
             try:
                 resolved = path.resolve(strict=True)
@@ -1240,6 +1246,26 @@ def _validate_copied_workspace(files: Any) -> list[str]:
     return errors
 
 
+def _g6_performance_report_binding_errors(run: Path, inputs: Any, artifacts_index: Any) -> list[str]:
+    """Bind the selected G6 report to its retained, artifact-indexed bytes."""
+    errors: list[str] = []
+    rows = [row for row in inputs if isinstance(row, dict) and row.get("path") == "performance-report.md"] if isinstance(inputs, list) else []
+    if len(rows) != 1 or rows[0].get("role") != "config" or not _is_sha(rows[0].get("sha256")):
+        errors.append("G6 selected performance report requires exactly one config input hash")
+        return errors
+    report = _resolve_inside(run, "performance-report.md")
+    if report is None or not report.is_file():
+        errors.append("G6 selected performance report is missing from retained evidence")
+        return errors
+    digest = sha256(report)
+    if rows[0]["sha256"] != digest:
+        errors.append("G6 selected performance report input hash differs from retained bytes")
+    indexed = [row for row in artifacts_index if isinstance(row, dict) and row.get("path") == "performance-report.md"] if isinstance(artifacts_index, list) else []
+    if len(indexed) != 1 or indexed[0].get("sha256") != digest or indexed[0].get("bytes") != report.stat().st_size:
+        errors.append("G6 selected performance report lacks an exact artifact hash and size")
+    return errors
+
+
 def _validate_generic_evidence(run: Path, manifest: dict[str, Any], checks: Any,
                                commands: Any, artifacts_index: Any) -> list[str]:
     """Meaning checks shared by G1-G8; shape validation alone is never acceptance."""
@@ -1280,7 +1306,8 @@ def _validate_generic_evidence(run: Path, manifest: dict[str, Any], checks: Any,
         if case:
             required_inputs.update(node.split("::", 1)[0] for node in case.test_nodes)
     if gate == "G6" and "T35" in required_ids:
-        required_inputs.update({"briefs/performance-report.md", "tools/performance/benchmark_core.py"})
+        required_inputs.update({"performance-report.md", "tools/performance/benchmark_core.py"})
+        errors.extend(_g6_performance_report_binding_errors(run, inputs, artifacts_index))
     if gate == "G6" and "T34" in required_ids:
         required_inputs.add("tools/matrix/run_public_matrix.py")
     missing_inputs = required_inputs - input_paths
@@ -2271,7 +2298,11 @@ def _copy_performance_evidence(run: Path) -> tuple[str | None, str | None]:
         if item.is_file():
             shutil.copy2(item, destination / name)
     report_target = run / "performance-report.md"
+    selected_hash = sha256(report_source)
     shutil.copy2(report_source, report_target)
+    if sha256(report_source) != selected_hash or sha256(report_target) != selected_hash:
+        report_target.unlink(missing_ok=True)
+        return None, None
     return destination.name, report_target.name
 
 
@@ -2531,8 +2562,13 @@ def _generic_manifest(run: Path, gate: str, state: str, started: str, checks: li
             if path.is_file() and not any(row["path"] == relative for row in inputs):
                 inputs.append({"path": relative, "role": "test", "sha256": sha256(path)})
     if gate == "G6" and "T35" in GATE_CASES.get(gate, ()):
-        for relative, role in (("briefs/performance-report.md", "config"),
-                               ("tools/performance/benchmark_core.py", "config")):
+        # The selected report may come from an ignored local evidence path.
+        # Hash its retained copy, so validation remains possible after the
+        # source environment variable and source file are gone.
+        report = run / "performance-report.md"
+        if report.is_file():
+            inputs.append({"path": report.name, "role": "config", "sha256": sha256(report)})
+        for relative, role in (("tools/performance/benchmark_core.py", "config"),):
             path = ROOT / relative
             if path.is_file() and not any(row["path"] == relative for row in inputs):
                 inputs.append({"path": relative, "role": role, "sha256": sha256(path)})
@@ -2699,6 +2735,8 @@ def run_case_gate(gate: str, fixture: Path | None, run: Path, public_only: bool 
             case_evidence.extend(mcp_audit_paths)
         if case_id == "T34" and gate == "G6" and matrix_report_path:
             case_evidence.append(matrix_report_path)
+        if case_id == "T35" and gate == "G6" and performance_report_path:
+            case_evidence.append(performance_report_path)
         checks.append(_case_check(case_id, expected, observed, status, case_evidence, gate))
     if gate == "G3":
         # A missing private oracle fixture is an environmental block; it never
