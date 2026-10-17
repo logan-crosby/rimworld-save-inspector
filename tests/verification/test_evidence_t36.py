@@ -27,8 +27,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from tools.gates.cases import CASES  # noqa: E402
-from tools.verify import (_artifact, _copy_performance_evidence, _expected_packaging_check_ids,
-                          _generic_manifest, _package_report_case_is_complete, _prerequisite_evidence_satisfied,
+from tools.verify import (_artifact, _copy_performance_evidence, _evidence_shape_errors,
+                          _g6_performance_report_binding_errors, _expected_packaging_check_ids,
+                          _generic_manifest, _validate_generic_evidence,
+                          _package_report_case_is_complete, _prerequisite_evidence_satisfied,
                           _copy_packaging_report, _gate_failure_findings, _junit_testcase_matches,
                           _package_archive_errors, _producer_command_log_errors,
                           _review_receipt_errors, now, run_gate, run_g7_gate,
@@ -676,6 +678,60 @@ class EvidenceTamperingTests(unittest.TestCase):
             self.assertIsNone(evidence_dir)
             self.assertIsNone(report_path)
             self.assertFalse((escaped_run / "performance-formal").exists())
+
+    def test_g6_selected_report_is_bound_to_retained_copy_without_private_brief(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_run = root / "evidence" / "performance-formal-006"
+            source_run.mkdir(parents=True)
+            selected = source_run / "performance-report.md"
+            selected.write_text("selected formal report\n")
+            run = root / "G6" / "run-001"
+            run.mkdir(parents=True)
+            with patch("tools.verify.ROOT", root), patch.dict(os.environ, {
+                    "RWSI_PERFORMANCE_RUN": str(source_run),
+                    "RWSI_PERFORMANCE_REPORT": str(selected)}):
+                evidence_dir, report_path = _copy_performance_evidence(run)
+                self.assertEqual((evidence_dir, report_path), ("performance-formal", "performance-report.md"))
+                selected.unlink()  # Later validation has only the retained evidence copy.
+                manifest = _generic_manifest(run, "G6", "BLOCKED", now(), [], [], [], [], [])
+                inputs = manifest["candidate"]["inputs"]
+                retained = run / "performance-report.md"
+                rows = [row for row in inputs if row["path"] == "performance-report.md"]
+                self.assertEqual(rows, [{"path": "performance-report.md", "role": "config",
+                                         "sha256": sha256(retained)}])
+                self.assertFalse((root / "briefs/performance-report.md").exists())
+                indexed = [_artifact(retained, "T35 selected report", run)]
+                self.assertEqual(_g6_performance_report_binding_errors(run, inputs, indexed), [])
+                self.assertFalse(any("performance-report.md" in error for error in
+                                     _evidence_shape_errors(manifest, [], [], indexed)))
+                self.assertFalse(any("G6 selected performance report" in error for error in
+                                     _validate_generic_evidence(run, manifest, [], [], indexed)))
+
+                self.assertTrue(any("input" in error for error in
+                                    _g6_performance_report_binding_errors(run, [], indexed)))
+                self.assertTrue(any("exactly one" in error for error in
+                                    _g6_performance_report_binding_errors(run, inputs + rows, indexed)))
+                self.assertTrue(any("config input" in error for error in
+                                    _g6_performance_report_binding_errors(run, [{**rows[0], "role": "test"}], indexed)))
+                manifest["candidate"]["inputs"] = [row for row in inputs if row["path"] != "performance-report.md"]
+                self.assertTrue(any("G6 selected performance report" in error for error in
+                                    _validate_generic_evidence(run, manifest, [], [], indexed)))
+                manifest["candidate"]["inputs"] = inputs
+                retained.write_text("tampered after copying\n")
+                self.assertTrue(any("hash" in error for error in
+                                    _g6_performance_report_binding_errors(run, inputs, indexed)))
+                self.assertTrue(any("G6 selected performance report" in error for error in
+                                    _validate_generic_evidence(run, manifest, [], [], indexed)))
+                retained.write_text("selected formal report\n")
+                wrong_hash = [{**rows[0], "sha256": "0" * 64}]
+                self.assertTrue(any("hash" in error for error in
+                                    _g6_performance_report_binding_errors(run, wrong_hash, indexed)))
+                self.assertTrue(any("artifact" in error for error in
+                                    _g6_performance_report_binding_errors(run, inputs, [])))
+                retained.unlink()
+                self.assertTrue(any("missing" in error for error in
+                                    _g6_performance_report_binding_errors(run, inputs, indexed)))
 
     def test_t35_rejects_stale_provenance_before_private_fixture_access(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
