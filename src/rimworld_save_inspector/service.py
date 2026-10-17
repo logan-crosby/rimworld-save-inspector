@@ -595,6 +595,8 @@ class QueryService:
                 item_entries = []
             item_identities = {r.record_id: r for r in items}
             for entry in reference_entries:
+                if entry["reference"]["status"] != "resolved":
+                    continue
                 for target_id in entry["reference"]["target_record_ids"]:
                     target = self._records.get(target_id)
                     if target is not None and target.type_name == "item":
