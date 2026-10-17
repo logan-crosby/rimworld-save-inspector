@@ -287,7 +287,8 @@ def _success_schema(name: str) -> dict[str, Any]:
     filter_required = {
         "inspect": [], "summary": [], "pawns": ["scope"], "pawn": ["record_id", "section"],
         "health": ["record_id"], "genes": ["record_id", "group"],
-        "equipment": ["record_id", "holder"], "inventory": ["record_id", "holder_id"],
+        "equipment": ["record_id", "holder", "estimate_missing_as_one"],
+        "inventory": ["record_id", "holder_id", "estimate_missing_as_one"],
         "research": ["section"], "mods": [],
     }
     schema["properties"]["query"] = _object({

@@ -558,6 +558,7 @@ class QueryService:
             if name == "equipment" and holder not in {"equipment", "apparel"}:
                 raise InspectorError("INVALID_ARGUMENT", "holder must be equipment or apparel.", snapshot_id=self.snapshot.snapshot_id)
             normalized["holder" if name == "equipment" else "holder_id"] = holder
+            normalized["estimate_missing_as_one"] = filters.get("estimate_missing_as_one", False)
             selected_holder_path = None
             if name == "inventory" and holder is not None:
                 selected_holder_path = self._owned_holder_path(pawn, holder)
