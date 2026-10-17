@@ -7,6 +7,7 @@ changed input is unavailable; it is never repaired from current observations.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 from dataclasses import dataclass
@@ -35,6 +36,8 @@ class PrivateInputs:
     oracle_path: Path
     spec_path: Path
     anchor_path: Path
+    anchor_expected_sha256: str | None
+    anchor_observed_sha256: str | None
     anchor: dict[str, Any] | None
     oracle: dict[str, Any] | None
     baseline_spec: str | None
@@ -55,13 +58,20 @@ class PrivateInputs:
     def input_hashes(self) -> dict[str, str] | None:
         if not self.ready or self.fixture is None:
             return None
-        return {"anchor": digest(self.anchor_path), "oracle": digest(self.oracle_path),
-                "baseline_spec": digest(self.spec_path), "fixture": digest(self.fixture)}
+        try:
+            return {"anchor_expected": self.anchor_expected_sha256,
+                    "anchor_observed": digest(self.anchor_path),
+                    "oracle": digest(self.oracle_path),
+                    "baseline_spec": digest(self.spec_path), "fixture": digest(self.fixture)}
+        except OSError:
+            return None
 
     def expected_input_hashes(self) -> dict[str, str] | None:
         if not self.ready or self.anchor is None:
             return None
-        return {"anchor": digest(self.anchor_path), "oracle": self.anchor["oracle_sha256"],
+        return {"anchor_expected": self.anchor_expected_sha256,
+                "anchor_observed": self.anchor_expected_sha256,
+                "oracle": self.anchor["oracle_sha256"],
                 "baseline_spec": self.anchor["baseline_spec_sha256"],
                 "fixture": self.anchor["fixture_sha256"]}
 
@@ -71,14 +81,27 @@ def load_private_inputs(fixture: Path | None = None, *, check_fixture: bool = Tr
     oracle_path = selected_path("RWSI_PRIVATE_ORACLE", ".private/acceptance-oracle.json")
     spec_path = selected_path("RWSI_PRIVATE_SPEC", ".private/baseline-design.md")
     anchor_path = selected_path("RWSI_PRIVATE_ANCHOR", ".private/acceptance-inputs.json")
+    anchor_expected = os.environ.get("RWSI_PRIVATE_ANCHOR_SHA256")
+    anchor_observed: str | None = None
     selected = fixture if fixture is not None else (Path(os.environ["RWSI_PRIVATE_FIXTURE"]).expanduser()
                                                   if use_env_fixture and os.environ.get("RWSI_PRIVATE_FIXTURE") else None)
     errors: list[str] = []
     anchor: dict[str, Any] | None = None
     oracle: dict[str, Any] | None = None
     baseline: str | None = None
+    if not isinstance(anchor_expected, str) or len(anchor_expected) != 64 or any(
+            character not in "0123456789abcdef" for character in anchor_expected):
+        errors.append("external private anchor fingerprint unavailable or malformed")
+        anchor_expected = None
     try:
-        anchor = json.loads(anchor_path.read_text())
+        raw_anchor = anchor_path.read_bytes()
+        anchor_observed = hashlib.sha256(raw_anchor).hexdigest()
+        if anchor_expected is None or not hmac.compare_digest(anchor_observed, anchor_expected):
+            errors.append("private anchor differs from external trusted fingerprint")
+        else:
+            anchor = json.loads(raw_anchor)
+        if anchor is None:
+            raise ValueError("private anchor is unauthenticated")
         if not isinstance(anchor, dict):
             raise ValueError("private anchor must be an object")
         if (anchor.get("schema_version") != "1.0" or
@@ -124,6 +147,7 @@ def load_private_inputs(fixture: Path | None = None, *, check_fixture: bool = Tr
             except OSError:
                 errors.append("private fixture unavailable")
     return PrivateInputs(selected, oracle_path, spec_path, anchor_path,
+                         anchor_expected, anchor_observed,
                          anchor, oracle, baseline, tuple(errors))
 
 

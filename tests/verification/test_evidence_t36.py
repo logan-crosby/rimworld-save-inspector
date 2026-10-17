@@ -19,6 +19,7 @@ import tarfile
 import unittest
 import zipfile
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import patch
 from pathlib import Path
 
@@ -293,12 +294,18 @@ class EvidenceTamperingTests(unittest.TestCase):
         }
         report = {"candidate": {"commit": "e" * 40, "git_tree_oid": "f" * 40,
                                 "tree_sha256": "1" * 64, "input_manifest_sha256": "2" * 64},
+                  "fixture": {"private_input_hashes": {"anchor_expected": "3" * 64,
+                                                        "anchor_observed": "3" * 64,
+                                                        "oracle": "4" * 64,
+                                                        "baseline_spec": "5" * 64,
+                                                        "fixture": "6" * 64}},
                   "archives": [{"kind": kind, **row} for kind, row in archives.items()]}
         review = {
             "schema_version": "1.0", "case_id": "T37", "status": "PASS",
             "reviewer": {"identity": "independent-reviewer", "run_id": "review-001", "independent": True},
             "started_at": "2026-10-16T20:00:00Z", "finished_at": "2026-10-16T20:01:00Z",
             "candidate": dict(report["candidate"]), "archives": json.loads(json.dumps(archives)),
+            "private_anchor": {"expected_sha256": "3" * 64, "observed_sha256": "3" * 64},
             "requirement_checks": [
                 {"requirement_id": f"R{index:02d}", "status": "PASS", "expected": "reviewed",
                  "observed": "reviewed", "evidence_refs": ["logs/stdout.txt"]}
@@ -322,11 +329,17 @@ class EvidenceTamperingTests(unittest.TestCase):
         }
         return review, report
 
+    def _review_errors(self, review: dict, report: dict, run: Path) -> list[str]:
+        trusted = report["fixture"]["private_input_hashes"]
+        private = SimpleNamespace(ready=True, expected_input_hashes=lambda: trusted)
+        with patch("tools.verify.load_private_inputs", return_value=private):
+            return _review_receipt_errors(review, report, run)
+
     def test_g7_review_receipt_binds_r01_r20_archives_and_real_logs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
             review, report = self._review_fixture(run)
-            self.assertEqual(_review_receipt_errors(review, report, run), [])
+            self.assertEqual(self._review_errors(review, report, run), [])
 
     def test_g7_review_receipt_rejects_candidate_or_archive_substitution(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -334,7 +347,7 @@ class EvidenceTamperingTests(unittest.TestCase):
             review, report = self._review_fixture(run)
             review["candidate"]["tree_sha256"] = "0" * 64
             review["archives"]["sdist"]["members"][0]["sha256"] = "9" * 64
-            errors = _review_receipt_errors(review, report, run)
+            errors = self._review_errors(review, report, run)
             self.assertTrue(any("exact candidate" in error for error in errors))
             self.assertTrue(any("sdist archive members" in error for error in errors))
 
@@ -344,9 +357,22 @@ class EvidenceTamperingTests(unittest.TestCase):
             review, report = self._review_fixture(run)
             review["requirement_checks"].pop()
             review["reproductions"][0]["stdout"]["sha256"] = "0" * 64
-            errors = _review_receipt_errors(review, report, run)
+            errors = self._review_errors(review, report, run)
             self.assertTrue(any("R01-R20" in error for error in errors))
             self.assertTrue(any("not bound to an artifact" in error for error in errors))
+
+    def test_g7_review_receipt_rejects_anchor_substitution_or_missing_trust(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            review, report = self._review_fixture(run)
+            review["private_anchor"]["observed_sha256"] = "7" * 64
+            self.assertTrue(any("externally trusted private anchor" in error
+                                for error in self._review_errors(review, report, run)))
+            review["private_anchor"]["observed_sha256"] = "3" * 64
+            missing = SimpleNamespace(ready=False, expected_input_hashes=lambda: None)
+            with patch("tools.verify.load_private_inputs", return_value=missing):
+                errors = _review_receipt_errors(review, report, run)
+            self.assertTrue(any("externally trusted private anchor" in error for error in errors))
 
     def test_g7_missing_prerequisites_block_without_invoking_packager(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

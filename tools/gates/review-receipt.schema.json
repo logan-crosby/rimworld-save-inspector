@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "case_id", "status", "reviewer", "started_at", "finished_at",
-    "candidate", "archives", "requirement_checks", "t37_checks", "reproductions", "findings", "artifacts"
+    "candidate", "private_anchor", "archives", "requirement_checks", "t37_checks", "reproductions", "findings", "artifacts"
   ],
   "properties": {
     "schema_version": {"const": "1.0"},
@@ -31,6 +31,14 @@
         "git_tree_oid": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"},
         "tree_sha256": {"$ref": "#/$defs/sha256"},
         "input_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "private_anchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["expected_sha256", "observed_sha256"],
+      "properties": {
+        "expected_sha256": {"$ref": "#/$defs/sha256"},
+        "observed_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
     "archives": {

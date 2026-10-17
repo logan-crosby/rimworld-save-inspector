@@ -38,6 +38,9 @@ REPORT_MARKER = "PACKAGED_CANDIDATE_REPORT="
 PUBLIC_SAMPLE_PATH = "examples/minimal_colony.rws"
 PUBLIC_SAMPLE_SHA256 = "f55d5e0741972f959b39029e26e6921c4d768bc5eb80c9726610b9ad85d3b7d7"
 PUBLIC_SAMPLE_BYTES = 1498
+PUBLIC_SEED_XML_SHA256 = "54340518cbca3e06fa399519922593fd6407f66000595052acd5553a18025b5a"
+PUBLIC_SEED_XML_BYTES = 3895
+SAVE_XML_PATTERN = re.compile(rb"(?is)<(?:savegame|game|world|factionManager|maps)(?:\s|>)")
 FORBIDDEN_COPY_PARTS = {"src", ".venv", ".venv-3.11", ".venv-3.14", ".private", "private", "evidence", ".git"}
 COPY_PATHS = (
     "tests",
@@ -57,6 +60,20 @@ class CandidateError(RuntimeError):
     def __init__(self, message: str, status: str = "FAIL") -> None:
         super().__init__(message)
         self.status = status
+
+
+def _contains_unapproved_save_xml(content: bytes, clean_name: str, public_sample: bool) -> bool:
+    if public_sample:
+        return False
+    if clean_name == "docs/design.md":
+        # Remove exactly one authenticated Appendix A fence. Any changed or
+        # duplicate fence remains visible to the save-XML detector.
+        for match in re.finditer(rb"```xml\n(.*?)```", content, re.DOTALL):
+            body = match.group(1)
+            if len(body) == PUBLIC_SEED_XML_BYTES and hashlib.sha256(body).hexdigest() == PUBLIC_SEED_XML_SHA256:
+                content = content[:match.start()] + content[match.end():]
+                break
+    return SAVE_XML_PATTERN.search(content) is not None
 
 
 def _utc() -> str:
@@ -315,8 +332,7 @@ def audit_package_members(archive: Path, members: dict[str, bytes]) -> dict[str,
         if (b'"fixture"' in content and b'"assertions"' in content and b'"expected"' in content or
                 b'"oracle_sha256"' in content and b'"baseline_spec_sha256"' in content and b'"fixture_sha256"' in content):
             forbidden_content.append(f"{name}:private-acceptance-json")
-        if (re.search(rb"(?is)<(?:savegame|game|world|factionManager|maps)(?:\s|>)", content)
-                and clean_name != "docs/design.md" and not public_sample):
+        if _contains_unapproved_save_xml(content, clean_name, public_sample):
             forbidden_content.append(f"{name}:embedded-save-xml")
         if (PurePosixPath(clean_name).suffix.lower() not in {".md", ".json"} and "PKG-INFO" not in clean_name
                 and re.search(rb"(?is)<(?:name|label|worldName|filename|source_name)\b[^>]*>[^<]{0,160}private[-_ ]?colony\b[^<]{0,160}</(?:name|label|worldName|filename|source_name)\s*>", content)):
@@ -332,7 +348,10 @@ def audit_scanner_probe() -> dict[str, Any]:
         "C:\\absolute.txt": b"",
         "payload.txt": b"ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
         "snippet.txt": b"<savegame><name>private-colony</name></savegame>",
-        "docs/design.md": b"<savegame>public synthetic example</savegame>",
+        "docs/design.md": (ROOT / "docs/design.md").read_bytes(),
+    })
+    injected = audit_package_members(Path("probe.whl"), {
+        "docs/design.md": (ROOT / "docs/design.md").read_bytes() + b"\n<savegame><world /></savegame>"
     })
     result = {
         "unsafe_path_detected": any(item.startswith("unsafe-path:") for item in findings["forbidden_names"]),
@@ -341,11 +360,12 @@ def audit_scanner_probe() -> dict[str, Any]:
         "synthetic_design_example_exempt": not any(
             "docs/design.md" in item and "embedded-save-xml" in item for item in findings["forbidden_content"]
         ),
+        "injected_design_xml_detected": any("embedded-save-xml" in item for item in injected["forbidden_content"]),
         "findings": findings,
     }
     result["passed"] = all(result[key] for key in (
         "unsafe_path_detected", "credential_detected", "private_xml_label_detected",
-        "synthetic_design_example_exempt",
+        "synthetic_design_example_exempt", "injected_design_xml_detected",
     ))
     return result
 
@@ -909,6 +929,8 @@ class Producer:
         env["RWSI_PRIVATE_ORACLE"] = str(private.oracle_path)
         env["RWSI_PRIVATE_SPEC"] = str(private.spec_path)
         env["RWSI_PRIVATE_ANCHOR"] = str(private.anchor_path)
+        if private.anchor_expected_sha256 is not None:
+            env["RWSI_PRIVATE_ANCHOR_SHA256"] = private.anchor_expected_sha256
         env["RIMWORLD_SAVE_INSPECTOR_INSTALLED_SITE"] = str(site)
         env["RIMWORLD_SAVE_INSPECTOR_SOURCE_ROOT"] = str(self.root)
         env["RIMWORLD_SAVE_INSPECTOR_IMPORT_AUDIT"] = str(audit_result)
@@ -998,10 +1020,11 @@ class Producer:
                           "scanner_probe": scanner_probe,
                           "audit_counts": {"archive_count": len(package_audit),
                                            "member_count": sum(row["member_count"] for row in package_audit),
-                                           "scanner_probe_count": 4,
+                                           "scanner_probe_count": 5,
                                            "scanner_probe_passed": sum(bool(scanner_probe[key]) for key in (
                                                "unsafe_path_detected", "credential_detected",
-                                               "private_xml_label_detected", "synthetic_design_example_exempt"))},
+                                               "private_xml_label_detected", "synthetic_design_example_exempt",
+                                               "injected_design_xml_detected"))},
                           "commands": [{"command_id": "build-distributions", "argv": built.args,
                                         "exit_code": built.returncode, "timed_out": False}]}}
         ]
