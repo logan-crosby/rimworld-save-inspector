@@ -86,6 +86,58 @@ class OracleTests(unittest.TestCase):
 
 
 class EvidenceValidatorTests(unittest.TestCase):
+    def test_private_anchor_requires_external_fingerprint_even_for_forged_pass(self) -> None:
+        trusted = os.environ.get("RWSI_PRIVATE_ANCHOR_SHA256")
+        if not trusted:
+            self.skipTest("externally authenticated private trust root unavailable")
+        private = load_private_inputs()
+        self.assertTrue(private.ready, private.errors)
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "g0"
+            write_g0_evidence(run, fixture=private.fixture, actor="trust-root-test",
+                              oracle_result=_fixture_oracle_result())
+            self.assertEqual(json.loads((run / "manifest.json").read_text())["status"], "PASS")
+            with mock.patch.dict(os.environ, {"RWSI_PRIVATE_ANCHOR_SHA256": ""}):
+                self.assertFalse(load_private_inputs(check_fixture=False).ready)
+                self.assertTrue(validate_evidence(run))
+                with self.assertRaises(ValueError):
+                    extract_private(private.fixture)
+                blocked = Path(tmp) / "no-trust-root"
+                write_g0_evidence(blocked, fixture=private.fixture, actor="trust-root-test")
+                self.assertEqual(json.loads((blocked / "manifest.json").read_text())["status"], "BLOCKED")
+
+    def test_coordinated_oracle_anchor_substitution_cannot_weaken_frozen_case(self) -> None:
+        trusted = os.environ.get("RWSI_PRIVATE_ANCHOR_SHA256")
+        if not trusted:
+            self.skipTest("externally authenticated private trust root unavailable")
+        private = load_private_inputs()
+        self.assertTrue(private.ready, private.errors)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            valid_run = root / "original-pass"
+            write_g0_evidence(valid_run, fixture=private.fixture, actor="trust-root-test",
+                              oracle_result=_fixture_oracle_result())
+            self.assertEqual(validate_evidence(valid_run), [])
+            oracle_copy = root / "oracle.json"
+            anchor_copy = root / "anchor.json"
+            oracle = json.loads(private.oracle_path.read_text())
+            case = next(row for row in oracle["assertions"] if row["check_id"] == "F13")
+            case["expected"]["def_counts"].pop(next(iter(case["expected"]["def_counts"])))
+            oracle_copy.write_text(json.dumps(oracle, sort_keys=True) + "\n")
+            anchor = json.loads(private.anchor_path.read_text())
+            anchor["oracle_sha256"] = hashlib.sha256(oracle_copy.read_bytes()).hexdigest()
+            anchor_copy.write_text(json.dumps(anchor, sort_keys=True) + "\n")
+            overrides = {"RWSI_PRIVATE_ORACLE": str(oracle_copy),
+                         "RWSI_PRIVATE_ANCHOR": str(anchor_copy)}
+            with mock.patch.dict(os.environ, overrides):
+                self.assertFalse(load_private_inputs(private.fixture).ready)
+                self.assertTrue(validate_evidence(valid_run))
+                with self.assertRaises(ValueError):
+                    extract_private(private.fixture)
+                run = root / "coordinated-substitution"
+                write_g0_evidence(run, fixture=private.fixture, actor="trust-root-test")
+                self.assertEqual(json.loads((run / "manifest.json").read_text())["status"], "BLOCKED")
+
     def test_missing_or_tampered_private_inputs_block_g0_without_changing_frozen_files(self) -> None:
         private = load_private_inputs(check_fixture=False)
         if not private.ready:
@@ -138,12 +190,16 @@ class EvidenceValidatorTests(unittest.TestCase):
             run = Path(tmp) / "run"
             from tools.verify import write_g0_evidence
 
-            write_g0_evidence(run, fixture=None, actor="unit-test")
+            with mock.patch.dict(os.environ, {"RWSI_PRIVATE_ANCHOR_SHA256": ""}):
+                write_g0_evidence(run, fixture=None, actor="unit-test")
             errors = validate_evidence(run)
             self.assertEqual(errors, [])
             manifest = json.loads((run / "manifest.json").read_text())
             self.assertEqual(manifest["status"], "BLOCKED")
             self.assertGreater(manifest["check_summary"]["blocked"], 0)
+            checks = {row["check_id"]: row for row in json.loads((run / "checks.json").read_text())}
+            self.assertEqual(checks["T01"]["status"], "PASS")
+            self.assertEqual(checks["spec_oracle_consistency"]["status"], "PASS")
 
 
 if __name__ == "__main__":

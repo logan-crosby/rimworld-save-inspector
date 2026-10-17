@@ -217,6 +217,17 @@ class PackagedCandidateValidationTests(unittest.TestCase):
         self.assertIs(fixture["identity_matches"], False)
         self.assertNotEqual(fixture["before_sha256"], fixture["expected_sha256"])
 
+    def test_g7_fixture_preflight_blocks_without_external_anchor_fingerprint(self) -> None:
+        selected = os.environ.get("RWSI_PRIVATE_FIXTURE")
+        if not selected or not Path(selected).is_file():
+            self.skipTest("private fixture unavailable")
+        with mock.patch.dict(os.environ, {"RWSI_PRIVATE_ANCHOR_SHA256": ""}):
+            fixture = validate_fixture(Path(selected))
+        self.assertIs(fixture["available"], True)
+        self.assertIs(fixture["identity_matches"], False)
+        self.assertIsNone(fixture["private_input_hashes"])
+        self.assertIn("external private anchor fingerprint", fixture["unavailable_reason"])
+
     def test_dirty_candidate_cannot_enter_packaging_acceptance(self) -> None:
         candidate = {"commit": "a" * 40, "tree_sha256": "b" * 64,
                      "input_manifest_sha256": "c" * 64, "lock_sha256": "d" * 64,
@@ -315,6 +326,7 @@ class PackagedCandidateValidationTests(unittest.TestCase):
         self.assertIs(probe["unsafe_path_detected"], True)
         self.assertIs(probe["credential_detected"], True)
         self.assertIs(probe["private_xml_label_detected"], True)
+        self.assertIs(probe["injected_design_xml_detected"], True)
 
     def test_only_authenticated_public_sample_save_is_allowed_in_archives(self) -> None:
         root = Path(__file__).resolve().parents[2]
@@ -327,6 +339,25 @@ class PackagedCandidateValidationTests(unittest.TestCase):
                               ("candidate/data.json", b'{"fixture":{},"assertions":[{"expected":1}]}')):
             report = audit_package_members(Path("candidate.tar.gz"), {path: content})
             self.assertTrue(report["forbidden_names"] or report["forbidden_content"])
+
+    def test_design_xml_exception_only_covers_exact_public_fenced_seed(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        design = (root / "docs/design.md").read_bytes()
+        artifact = Path("candidate.tar.gz")
+        name = "candidate/docs/design.md"
+        self.assertEqual(audit_package_members(artifact, {name: design})["forbidden_content"], [])
+        injected = b"<savegame><world><name>private-test</name></world></savegame>"
+        cases = (
+            design + b"\n" + injected,
+            design.replace(b"</savegame>\n```", b"</savegame>\n" + injected + b"\n```", 1),
+            design + b"\n```xml\n" + (root / "tests/fixtures/synthetic/seed.rws").read_bytes() + b"```",
+        )
+        for content in cases:
+            with self.subTest(kind=len(content)):
+                findings = audit_package_members(artifact, {name: content})["forbidden_content"]
+                self.assertTrue(any("embedded-save-xml" in item for item in findings))
+        other = audit_package_members(artifact, {"candidate/docs/release-notes.md": injected})
+        self.assertTrue(any("embedded-save-xml" in item for item in other["forbidden_content"]))
 
     def test_absent_junit_proof_cannot_pass_required_nodes(self) -> None:
         required = ["tests/unit/test_sample.py::SampleTests::test_expected"]

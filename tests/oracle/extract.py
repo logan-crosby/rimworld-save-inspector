@@ -180,7 +180,13 @@ def _private_oracle(path: Path) -> dict[str, object]:
     root = Path(__file__).resolve().parents[2]
     anchor_path = Path(os.environ.get("RWSI_PRIVATE_ANCHOR") or root / ".private/acceptance-inputs.json")
     oracle_path = Path(os.environ.get("RWSI_PRIVATE_ORACLE") or root / ".private/acceptance-oracle.json")
-    anchor = json.loads(anchor_path.read_text())
+    trusted = os.environ.get("RWSI_PRIVATE_ANCHOR_SHA256")
+    if not trusted or len(trusted) != 64 or any(character not in "0123456789abcdef" for character in trusted):
+        raise ValueError("external private anchor fingerprint unavailable or malformed")
+    anchor_raw = anchor_path.read_bytes()
+    if hashlib.sha256(anchor_raw).hexdigest() != trusted:
+        raise ValueError("private anchor differs from external trusted fingerprint")
+    anchor = json.loads(anchor_raw)
     if hashlib.sha256(oracle_path.read_bytes()).hexdigest() != anchor["oracle_sha256"]:
         raise ValueError("private oracle differs from frozen anchor")
     if path.stat().st_size != anchor["fixture_bytes"] or hashlib.sha256(path.read_bytes()).hexdigest() != anchor["fixture_sha256"]:
