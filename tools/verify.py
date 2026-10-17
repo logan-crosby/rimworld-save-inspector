@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import ast
+import base64
 import datetime as dt
 import hashlib
+import importlib.metadata
 import json
 import os
 import platform
@@ -35,10 +37,10 @@ V1_PACKAGE_VERSION = "1.0.0"
 V1_PROFILE_VERSION = "rimworld-1.6/v1"
 
 
-def _source_string_constant(relative: str, name: str) -> str | None:
+def _literal_string_constant(path: Path, name: str) -> str | None:
     """Read a release constant without importing the product into G0."""
     try:
-        tree = ast.parse((ROOT / relative).read_text())
+        tree = ast.parse(path.read_text())
     except (OSError, SyntaxError, UnicodeError):
         return None
     for node in tree.body:
@@ -49,6 +51,36 @@ def _source_string_constant(relative: str, name: str) -> str | None:
     return None
 
 
+def _installed_release_constants(package_version: str | None) -> tuple[str | None, str | None]:
+    """Read RECORD-authenticated installed files when G7 excludes product source."""
+    try:
+        distribution = importlib.metadata.distribution("rimworld-save-inspector")
+        if distribution.version != package_version or not distribution.files:
+            return None, None
+        records = {str(item): item for item in distribution.files}
+        if len(records) != len(distribution.files):
+            return None, None
+        prefix = Path(sys.prefix).resolve(strict=True)
+        values: list[str | None] = []
+        for relative, name in (("rimworld_save_inspector/__init__.py", "__version__"),
+                               ("rimworld_save_inspector/parser/core.py", "PARSER_PROFILE")):
+            record = records.get(relative)
+            if record is None or record.hash is None or record.hash.mode != "sha256":
+                return None, None
+            path = Path(distribution.locate_file(record))
+            resolved = path.resolve(strict=True)
+            if (path.is_symlink() or prefix not in resolved.parents or "site-packages" not in resolved.parts or
+                    not resolved.is_file() or record.size != resolved.stat().st_size):
+                return None, None
+            digest = base64.urlsafe_b64encode(hashlib.sha256(resolved.read_bytes()).digest()).rstrip(b"=").decode()
+            if digest != record.hash.value:
+                return None, None
+            values.append(_literal_string_constant(resolved, name))
+        return values[0], values[1]
+    except (importlib.metadata.PackageNotFoundError, OSError, RuntimeError, ValueError, TypeError, AttributeError):
+        return None, None
+
+
 def _release_identity() -> tuple[str | None, str | None, str | None]:
     """Return independently declared metadata, package, and parser profile versions."""
     try:
@@ -57,9 +89,13 @@ def _release_identity() -> tuple[str | None, str | None, str | None]:
         package = project.get("version") if isinstance(project, dict) else None
     except (OSError, tomllib.TOMLDecodeError):
         package = None
-    return (package if isinstance(package, str) else None,
-            _source_string_constant("src/rimworld_save_inspector/__init__.py", "__version__"),
-            _source_string_constant("src/rimworld_save_inspector/parser/core.py", "PARSER_PROFILE"))
+    package = package if isinstance(package, str) else None
+    if (ROOT / "src").exists():
+        parser = _literal_string_constant(ROOT / "src/rimworld_save_inspector/__init__.py", "__version__")
+        profile = _literal_string_constant(ROOT / "src/rimworld_save_inspector/parser/core.py", "PARSER_PROFILE")
+    else:
+        parser, profile = _installed_release_constants(package)
+    return package, parser, profile
 
 
 def _private_identity() -> tuple[int | None, str | None]:

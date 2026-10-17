@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import ast
+import base64
 import hashlib
 import importlib.util
 import os
@@ -29,7 +30,7 @@ sys.path.insert(0, str(ROOT))
 from tools.gates.cases import CASES  # noqa: E402
 from tools.verify import (_artifact, _copy_performance_evidence, _evidence_shape_errors,
                           _g6_performance_report_binding_errors, _expected_packaging_check_ids,
-                          _generic_manifest, _validate_generic_evidence,
+                          _generic_manifest, _release_identity, _validate_generic_evidence,
                           _packaged_candidate_report_errors, _t20_report_errors,
                           _package_report_case_is_complete, _prerequisite_evidence_satisfied,
                           _copy_packaging_report, _gate_failure_findings, _junit_testcase_matches,
@@ -104,6 +105,55 @@ def _reseal(run: Path, state: str | None = None) -> None:
 
 
 class EvidenceTamperingTests(unittest.TestCase):
+    def test_source_excluded_workspace_uses_hash_authenticated_installed_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory) / "workspace"
+            workspace.mkdir()
+            (workspace / "pyproject.toml").write_text('[project]\nversion = "1.0.0"\n')
+            environment = Path(directory) / "installed-env"
+            site = environment / "lib/python3.14/site-packages"
+            module = site / "rimworld_save_inspector"
+            core = module / "parser/core.py"
+            core.parent.mkdir(parents=True)
+            package = module / "__init__.py"
+            package.write_text('__version__ = "1.0.0"\n')
+            core.write_text('PARSER_PROFILE = "rimworld-1.6/v1"\n')
+
+            class RecordedPath(str):
+                def __new__(cls, value: str, path: Path):
+                    instance = str.__new__(cls, value)
+                    instance.hash = SimpleNamespace(mode="sha256", value=base64.urlsafe_b64encode(
+                        hashlib.sha256(path.read_bytes()).digest()).rstrip(b"=").decode())
+                    instance.size = path.stat().st_size
+                    return instance
+
+            def records() -> list[RecordedPath]:
+                return [RecordedPath("rimworld_save_inspector/__init__.py", package),
+                        RecordedPath("rimworld_save_inspector/parser/core.py", core)]
+
+            distribution = SimpleNamespace(version="1.0.0", files=records(),
+                                           locate_file=lambda item: site / str(item))
+            with patch("tools.verify.ROOT", workspace), patch("tools.verify.sys.prefix", str(environment)), \
+                    patch("importlib.metadata.distribution", return_value=distribution):
+                self.assertFalse((workspace / "src").exists())
+                self.assertEqual(_release_identity(), ("1.0.0", "1.0.0", "rimworld-1.6/v1"))
+                with patch("importlib.metadata.distribution", side_effect=importlib.metadata.PackageNotFoundError):
+                    self.assertEqual(_release_identity(), ("1.0.0", None, None))
+                manifest = _generic_manifest(workspace / "G1-test", "G1", "BLOCKED", now(), [], [], [], [], [])
+                self.assertFalse(any("candidate package/parser/profile version" in error for error in
+                                     _evidence_shape_errors(manifest, [], [], [])))
+                core.write_text('PARSER_PROFILE = "wrong-profile"\n')
+                self.assertNotEqual(_release_identity(), ("1.0.0", "1.0.0", "rimworld-1.6/v1"),
+                                    "changed installed bytes must fail their wheel RECORD hash")
+                distribution.files = records()
+                self.assertTrue(any("candidate package/parser/profile version" in error for error in
+                                    _evidence_shape_errors(manifest, [], [], [])))
+                core.write_text('PARSER_PROFILE = "rimworld-1.6/v1"\n')
+                distribution.files = records()
+                distribution.version = "0.1.0"
+                self.assertTrue(any("candidate package/parser/profile version" in error for error in
+                                    _evidence_shape_errors(manifest, [], [], [])))
+
     def test_g0_manifest_records_declared_v1_package_version(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory) / "G0-public-only"
