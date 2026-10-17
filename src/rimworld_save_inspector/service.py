@@ -218,7 +218,7 @@ class QueryService:
                 entries.pop()
                 next_offset = offset + len(entries)
                 next_cursor = self._make_cursor(name, normal, effective_limit or 50, next_offset) if next_offset < len(rows) else None
-                page = {"total": len(rows) if mutable_data.get("collection_state", "present") == "present" else None,
+                page = {"total": self._page_total(name, normal, mutable_data, rows),
                         "returned": len(entries), "next_cursor": next_cursor}
                 envelope = QueryResponse("1.0", self.snapshot.snapshot_id,
                     {"name": name, "filters": normal, "limit": effective_limit}, mutable_data, coverage,
@@ -441,6 +441,9 @@ class QueryService:
         records = list(self._records_by_type["pawn"])
         if scope == "map":
             records = [r for r in records if r.scope == "map"]
+            maps_state = self.snapshot.collection_states.get("/savegame[1]/game[1]/maps[1]", "absent")
+            records = [r for r in records if maps_state == "present" and
+                       self.snapshot.collection_states.get(r.source_path.rsplit("/thing[", 1)[0]) == "present"]
         elif scope.startswith("world_"):
             records = [r for r in records if r.scope == scope or any(
                 membership.get("scope") == scope for membership in self._reference_memberships.get(r.record_id, ()))]
@@ -467,13 +470,30 @@ class QueryService:
         collection_state = self._scope_collection_state(scope, chosen_map)
         data = {"field_status": {}, "raw_values": {}, "derivations": [], "collection_state": collection_state,
                 "entries": []}
-        return normal, data, self._coverage(scope, force_partial=collection_state != "present"), records
+        unavailable = ([(m.source_path + "/things[1]", self._map_things_state[m.record_id])
+                        for m in ([chosen_map] if chosen_map is not None else self._records_by_type["map"])
+                        if self._map_things_state[m.record_id] != "present"] if scope == "map" else [])
+        if scope == "map" and chosen_map is None and unavailable and collection_state == "present":
+            data["derivations"].append({"field": "entries", "rule": "known-direct-map-pawns-v1",
+                                        "inputs": ["maps", "things"]})
+        diagnostics = tuple(Diagnostic("MISSING_COLLECTION", "warning", "Map roster source is unavailable",
+                                        path, details={"state": state}) for path, state in unavailable)
+        return normal, data, self._coverage(scope, force_partial=collection_state != "present" or bool(unavailable),
+                                            extra_diagnostics=diagnostics), records
 
     def _scope_collection_state(self, scope: str, map_record: Record | None) -> str:
         if scope == "map":
-            states = [state for path, state in self.snapshot.collection_states.items() if path.endswith("/maps[1]") or path.endswith("/things[1]") and (map_record is None or path.startswith(map_record.source_path))]
-            if not states or any(state != "present" for state in states):
-                return "absent" if not states else next((s for s in states if s != "present"), "present")
+            maps_state = self.snapshot.collection_states.get("/savegame[1]/game[1]/maps[1]", "absent")
+            if maps_state != "present":
+                return maps_state
+            maps = [map_record] if map_record is not None else self._records_by_type["map"]
+            states = [self._map_things_state[record.record_id] for record in maps]
+            if map_record is None and (not maps or "present" in states):
+                # The unfiltered roster is a derived union of known map sources.
+                # Missing maps make its total unknown, but known siblings remain queryable.
+                return "present"
+            if any(state != "present" for state in states):
+                return next(state for state in states if state != "present")
             return "present"
         if scope.startswith("world_"):
             marker = {"world_alive": "pawnsAlive", "world_dead": "pawnsDead", "world_mothballed": "pawnsMothballed"}[scope]
@@ -495,7 +515,7 @@ class QueryService:
                 raise InspectorError("INVALID_ARGUMENT", "section must be core, skills, or traits.", snapshot_id=self.snapshot.snapshot_id)
             normalized["section"] = section
             if section == "core":
-                child_counts = {kind: self._count_child(pawn, kind, path) for kind, path in (("skills", "skills/skills"), ("traits", "allTraits"), ("hediffs", "hediffs"), ("endogenes", "endogenes"), ("xenogenes", "xenogenes"), ("equipment", "equipment"), ("apparel", "wornApparel"), ("inventory", "inventory"))}
+                child_counts = {kind: self._count_child(pawn, kind) for kind in ("skills", "traits", "hediffs", "endogenes", "xenogenes", "equipment", "apparel", "inventory")}
                 core = {**self._pawn_index(pawn), "gender": _get(pawn, "/gender"), "age_biological_ticks": _coerce_int(_get(pawn, "/ageTracker/ageBiologicalTicks")),
                         "birth_abs_ticks": _coerce_int(_get(pawn, "/ageTracker/birthAbsTicks")),
                         "host_faction": self.indexes.resolve(_get(pawn, "/guest/hostFaction"), "faction", state=_status(pawn, "/guest/hostFaction")).as_dict(),
@@ -504,11 +524,15 @@ class QueryService:
             kind = "skill" if section == "skills" else "trait"
             entries = [self._domain_record(r) for r in _source_sort([r for r in children if r.type_name == kind])]
             state = self._child_collection_state(pawn, "skills/skills" if kind == "skill" else "allTraits")
+            if state != "present":
+                entries = []
             return normalized, {"field_status": {}, "raw_values": {}, "derivations": [], "pawn_record_id": record_id, "collection_state": state, "entries": entries}, self._coverage(pawn.scope or "held", force_partial=state != "present"), entries
         if name == "health":
             state = _get(pawn, "/healthTracker/healthState")
             entries = [self._domain_record(r) for r in _source_sort([r for r in children if r.type_name == "hediff"])]
             coll_state = self._child_collection_state(pawn, "hediffs")
+            if coll_state != "present":
+                entries = []
             return normalized, {"field_status": {"/health_state": _status(pawn, "/healthTracker/healthState")} if state is None else {}, "raw_values": {}, "derivations": [], "pawn_record_id": record_id, "health_state": state, "collection_state": coll_state, "entries": entries}, self._coverage(pawn.scope or "held", force_partial=coll_state != "present"), entries
         if name == "genes":
             group = filters.get("group", "endogenes")
@@ -521,9 +545,12 @@ class QueryService:
             header_status = {f"/{key}": pawn.field_status[path] for key, path in (("xenotype", "/genes/xenotype"), ("xenotype_name", "/genes/xenotypeName"), ("hybrid", "/genes/hybrid"), ("icon_def", "/genes/iconDef")) if path in pawn.field_status}
             header = {"field_status": header_status, "raw_values": {}, "derivations": [], "xenotype": _get(pawn, "/genes/xenotype"),
                       "xenotype_name": _get(pawn, "/genes/xenotypeName"), "hybrid": _coerce_bool(_get(pawn, "/genes/hybrid")), "icon_def": _get(pawn, "/genes/iconDef")}
-            counts = {"endogenes": sum("/endogenes[" in r.source_path for r in genes), "xenogenes": sum("/xenogenes[" in r.source_path for r in genes)}
+            counts = {key: self._count_child(pawn, key) for key in ("endogenes", "xenogenes")}
+            group_state = self._child_collection_state(pawn, group)
+            if group_state != "present":
+                entries = []
             return normalized, {"field_status": {}, "raw_values": {}, "derivations": [], "pawn_record_id": record_id, "header": header, "group": group,
-                               "group_counts": counts, "collection_state": self._child_collection_state(pawn, group)}, self._coverage(pawn.scope or "held", force_partial=self._child_collection_state(pawn, group) != "present"), entries
+                               "group_counts": counts, "collection_state": group_state}, self._coverage(pawn.scope or "held", force_partial=group_state != "present"), entries
         if name in {"equipment", "inventory"}:
             holder = filters.get("holder", "equipment") if name == "equipment" else filters.get("holder_id")
             if name == "equipment" and holder not in {"equipment", "apparel"}:
@@ -540,9 +567,7 @@ class QueryService:
             if name == "inventory" and holder is not None:
                 state = str(self.snapshot.collection_states.get(selected_holder_path, "absent"))
             elif name == "inventory":
-                outer_state = self._child_collection_state(pawn, "inventory")
-                state = (outer_state if outer_state != "present"
-                         else self._child_collection_state(pawn, "inventory/innerContainer/innerList"))
+                state = self._child_collection_state(pawn, "inventory/innerContainer/innerList")
             else:
                 state = self._child_collection_state(
                     pawn, "equipment/equipment/innerList" if holder == "equipment" else "apparel/wornApparel/innerList")
@@ -563,6 +588,8 @@ class QueryService:
                                           "item": None, "reference": reference.as_dict(),
                                           "pawn_record_id": held_pawn.record_id})
             item_entries = sorted(item_entries + reference_entries, key=lambda e: _ordinal_key(e["source_path"]))
+            if state != "present":
+                item_entries = []
             item_identities = {r.record_id: r for r in items}
             for entry in reference_entries:
                 for target_id in entry["reference"]["target_record_ids"]:
@@ -616,10 +643,27 @@ class QueryService:
         return common
 
     def _child_collection_state(self, pawn: Record, marker: str) -> str:
-        marker_tags = tuple(marker.split("/"))
-        candidates = [(path, state) for path, state in self.snapshot.collection_states.items()
-                      if path.startswith(pawn.source_path + "/") and re_tags(path)[-len(marker_tags):] == marker_tags]
-        return candidates[0][1] if candidates else "absent"
+        suffixes = {
+            "skills/skills": "skills/skills",
+            "allTraits": "story/traits/allTraits",
+            "hediffs": "healthTracker/hediffSet/hediffs",
+            "endogenes": "genes/endogenes",
+            "xenogenes": "genes/xenogenes",
+            "equipment": "equipment/equipment/innerList",
+            "equipment/equipment/innerList": "equipment/equipment/innerList",
+            "apparel": "apparel/wornApparel/innerList",
+            "apparel/wornApparel/innerList": "apparel/wornApparel/innerList",
+            "inventory": "inventory",
+            "inventory/innerContainer/innerList": "inventory/innerContainer/innerList",
+        }
+        parts = suffixes[marker].split("/")
+        prefix = pawn.source_path
+        for part in parts:
+            prefix += f"/{part}[1]"
+            state = self.snapshot.collection_states.get(prefix)
+            if state is not None and state != "present":
+                return state
+        return self.snapshot.collection_states.get(prefix, "absent")
 
     def _owned_holder_path(self, pawn: Record, holder_id: str) -> str | None:
         root_path = _root_holder_path(pawn, "inventory")
@@ -635,12 +679,27 @@ class QueryService:
                 return path
         return None
 
-    def _count_child(self, pawn: Record, type_name: str, marker: str) -> int | None:
+    def _count_child(self, pawn: Record, kind: str) -> int | None:
+        domains = {
+            "skills": ("skill", "skills/skills"),
+            "traits": ("trait", "allTraits"),
+            "hediffs": ("hediff", "hediffs"),
+            "endogenes": ("gene", "endogenes"),
+            "xenogenes": ("gene", "xenogenes"),
+        }
+        type_name, marker = domains.get(kind, ("", kind))
+        if kind == "inventory":
+            marker = "inventory/innerContainer/innerList"
         state = self._child_collection_state(pawn, marker)
         if state != "present":
             return None
-        marker_tags = tuple(marker.split("/"))
-        return sum(r.type_name == type_name and _contains_tag_sequence(re_tags(r.source_path), marker_tags)
+        if kind in {"equipment", "apparel", "inventory"}:
+            return self._holder_entry_count(_root_holder_path(pawn, kind))
+        suffixes = {"skills": "skills[1]/skills[1]", "traits": "story[1]/traits[1]/allTraits[1]",
+                    "hediffs": "healthTracker[1]/hediffSet[1]/hediffs[1]",
+                    "endogenes": "genes[1]/endogenes[1]", "xenogenes": "genes[1]/xenogenes[1]"}
+        parent_path = pawn.source_path + "/" + suffixes[kind]
+        return sum(r.type_name == type_name and r.source_path.rsplit("/li[", 1)[0] == parent_path
                    for r in self._children.get(pawn.record_id, ()))
 
     def _item(self, record: Record) -> dict[str, Any]:
@@ -777,12 +836,19 @@ class QueryService:
             page_data = {**data, "entries": selected}
             next_cursor = self._make_cursor(query.name, filters, limit, end) if end < len(rows) else None
             result_page = {"total": len(rows), "returned": len(selected), "next_cursor": next_cursor}
-        total: int | None = len(rows) if data.get("collection_state", "present") == "present" else None
-        result_page["total"] = total
+        result_page["total"] = self._page_total(query.name, filters, data, rows)
         if not selected and len(rows) > offset:
             raise InspectorError("RESULT_TOO_LARGE", "A single result entry exceeds the response byte limit.",
                                  _narrower_query_details(query.name, filters), snapshot_id=self.snapshot.snapshot_id)
         return page_data, result_page
+
+    def _page_total(self, name: str, filters: dict[str, Any], data: dict[str, Any], rows: list[Any]) -> int | None:
+        if data.get("collection_state", "present") != "present":
+            return None
+        if name == "pawns" and filters.get("scope", "map") == "map" and filters.get("map_id") is None:
+            if any(state != "present" for state in self._map_things_state.values()):
+                return None
+        return len(rows)
 
     def _cursor_payload(self, name: str, filters: dict[str, Any], limit: int, offset: int) -> dict[str, Any]:
         sort_rule = "saved-order-v1" if name in {"research", "mods"} else "source-ordinal-v1" if name in {"health", "genes", "equipment", "inventory"} or name == "pawn" and filters.get("section") in {"skills", "traits"} else "saved-id-record-id-v1"
@@ -856,10 +922,6 @@ def record_id_for_holder(path: str) -> str:
 def re_tags(path: str) -> tuple[str, ...]:
     import re
     return tuple(re.findall(r"/([^/\[]+)\[\d+\]", path))
-
-
-def _contains_tag_sequence(tags: tuple[str, ...], sequence: tuple[str, ...]) -> bool:
-    return any(tags[index:index + len(sequence)] == sequence for index in range(len(tags) - len(sequence) + 1))
 
 
 def _is_supported_reference_path(path: str) -> bool:

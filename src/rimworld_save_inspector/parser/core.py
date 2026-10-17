@@ -40,7 +40,7 @@ _EXPECTED_FIELDS = {
     "world_object": ("/ID", "/id", "/def", "/name", "/label", "/nameInt"),
 }
 _REFERENCE_LEAVES = {"faction", "hostFaction", "slaveFaction", "sourceGene", "suppressedBy", "pawn", "overriddenByGene", "parent"}
-_COLLECTION_NAMES = {"maps", "things", "pawnsAlive", "pawnsDead", "pawnsMothballed", "pawnsForcefullyKeptAsWorldPawns", "skills", "allTraits", "hediffs", "endogenes", "xenogenes", "equipment", "wornApparel", "inventory", "innerList", "progress", "techprints", "modIds", "modNames", "keys", "values"}
+_COLLECTION_NAMES = {"maps", "things", "pawnsAlive", "pawnsDead", "pawnsMothballed", "pawnsForcefullyKeptAsWorldPawns", "skills", "story", "traits", "allTraits", "healthTracker", "hediffSet", "hediffs", "genes", "endogenes", "xenogenes", "equipment", "apparel", "wornApparel", "inventory", "innerContainer", "innerList", "progress", "techprints", "modIds", "modNames", "keys", "values"}
 _EMPTY_ATTRS: Mapping[str, str] = MappingProxyType({})
 
 
@@ -196,14 +196,20 @@ class _Handler(ContentHandler):
             return "pawn", f"world_{pool}"
         if cls not in {"Pawn", "Corpse"} and tail.endswith("innerList/li") and self._known_holder_list():
             return "item", "held"
-        if tag == "li" and tail.endswith("hediffs/li"):
-            return "hediff", "held"
-        if tag == "li" and (tail.endswith("endogenes/li") or tail.endswith("xenogenes/li")):
-            return "gene", "held"
-        if tag == "li" and tail.endswith("skills/li"):
-            return "skill", "held"
-        if tag == "li" and tail.endswith("allTraits/li"):
-            return "trait", "held"
+        if tag == "li":
+            pawn = next((builder for builder in reversed(self.builders) if builder.type_name == "pawn"), None)
+            if pawn is not None:
+                parent_path = self.frames[-1].path.rsplit("/li[", 1)[0]
+                child_sources = {
+                    "healthTracker[1]/hediffSet[1]/hediffs[1]": "hediff",
+                    "genes[1]/endogenes[1]": "gene",
+                    "genes[1]/xenogenes[1]": "gene",
+                    "skills[1]/skills[1]": "skill",
+                    "story[1]/traits[1]/allTraits[1]": "trait",
+                }
+                for suffix, child_kind in child_sources.items():
+                    if parent_path == pawn.path + "/" + suffix:
+                        return child_kind, "held"
         return "", None
 
     def startElement(self, name: str, attrs: Any) -> None:
@@ -339,6 +345,9 @@ class _Handler(ContentHandler):
         if frame.tag != name:
             raise InspectorError("MALFORMED_XML", "The XML element stack is inconsistent.")
         text = "".join(frame.text or ()).strip()
+        if name in _COLLECTION_NAMES and frame.attrs.get("IsNull") == "True" and (frame.has_child or text):
+            self.collections[frame.path] = "invalid"
+            self._diagnostic("INVALID_VALUE", path=frame.path, detail="Null collection has content")
         if name == "contentsLookMode" and len(self.frames) >= 2 and self.frames[-2].tag == "innerContainer":
             self._holder_modes[self.frames[-2].path] = text
         if self.builders and self.builders[-1].type_name != "unsupported" and text:
