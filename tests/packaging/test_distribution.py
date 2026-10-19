@@ -16,6 +16,7 @@ import tempfile
 import time
 import venv
 import zipfile
+import pytest
 from pathlib import PurePosixPath, PureWindowsPath
 from datetime import datetime, timezone
 from pathlib import Path
@@ -82,7 +83,7 @@ def _audit_archive_members(artifact: Path, members: dict[str, bytes]) -> dict[st
         if posix.is_absolute() or windows.is_absolute() or windows.drive or ".." in parts:
             forbidden_names.append(f"unsafe-path:{name}")
         lowered_parts = [part.lower() for part in parts]
-        ignored_parts = {".git", ".private", ".pytest_cache", "__pycache__", "build", "evidence", "tests", "tools"}
+        ignored_parts = {".git", ".private", ".superpowers", ".codex", ".agents", ".pytest_cache", "__pycache__", "build", "evidence", "tests", "tools"}
         ignored_file = Path(parts[-1]).name.lower()
         public_sample = (name == PUBLIC_SAMPLE_PATH and len(members[raw_name]) == PUBLIC_SAMPLE_BYTES
                          and hashlib.sha256(members[raw_name]).hexdigest() == PUBLIC_SAMPLE_SHA256)
@@ -124,6 +125,17 @@ def _audit_archive_members(artifact: Path, members: dict[str, bytes]) -> dict[st
                 and re.search(rb"(?is)<(?:name|label|worldName|filename|source_name)\b[^>]*>[^<]{0,160}private[-_ ]?colony\b[^<]{0,160}</(?:name|label|worldName|filename|source_name)\s*>", content)):
             forbidden_content.append(f"{name}:private-fixture-label-in-xml")
     return {"forbidden_names": forbidden_names, "forbidden_content": forbidden_content}
+
+
+@pytest.mark.parametrize("name", [
+    ".superpowers/sdd/frozen/source/README.md",
+    ".superpowers/evidence/attempt/output.txt",
+    ".codex/config.toml",
+    ".agents/worker.md",
+])
+def test_internal_agent_and_verification_trees_are_forbidden_even_without_private_markers(name):
+    findings = _audit_archive_members(Path("probe.whl"), {name: b"ordinary text without secrets"})
+    assert name in findings["forbidden_names"]
 
 
 def test_design_archive_exception_rejects_added_save_xml():

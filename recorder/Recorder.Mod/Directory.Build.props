@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <RimWorldGameProfile Condition="'$(RimWorldGameProfile)' == ''">reference-1.6.4535</RimWorldGameProfile>
+    <BaseIntermediateOutputPath>obj/$(RimWorldGameProfile)/</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <BaseOutputPath>bin/$(RimWorldGameProfile)/</BaseOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/obj/**;**/bin/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

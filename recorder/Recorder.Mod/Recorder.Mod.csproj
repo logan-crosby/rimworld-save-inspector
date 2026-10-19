@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>RimWorld.LifeRecorder</AssemblyName>
+    <RootNamespace>RimWorld.LifeRecorder</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony" Version="2.3.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <Compile Include="../Recorder.Core/JournalEvent.cs" Link="Core/JournalEvent.cs" />
+    <Compile Include="../Recorder.Core/RecorderTimeBasis.cs" Link="Core/RecorderTimeBasis.cs" />
+    <Compile Include="../Recorder.Core/SaveOutputVerifier.cs" Link="Core/SaveOutputVerifier.cs" />
+    <Compile Include="../Recorder.Core/RecorderStoragePaths.cs" Link="Core/RecorderStoragePaths.cs" />
+    <Compile Include="../Recorder.Core/RecorderQueue.cs" Link="Core/RecorderQueue.cs" />
+    <Compile Include="../Recorder.Core/BirthObservationBuffer.cs" Link="Core/BirthObservationBuffer.cs" />
+    <Compile Include="../Recorder.Core/TransitionCorrelation.cs" Link="Core/TransitionCorrelation.cs" />
+    <Compile Include="../Recorder.Core/JournalWriter.cs" Link="Core/JournalWriter.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RimWorldGameProfile)' == 'reference-1.6.4535'">
+    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4535" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RimWorldGameProfile)' == 'native-1.7.4980'">
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(RimWorldNativeManagedDir)/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(RimWorldNativeManagedDir)/UnityStubs.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityStubs">
+      <HintPath>$(RimWorldNativeManagedDir)/UnityStubs.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="About/About.xml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="LoadFolders.xml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../ThirdPartyLicenses/*.txt" Link="ThirdPartyLicenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

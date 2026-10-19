@@ -1,0 +1,177 @@
+{
+  "contract": "rwsi-native-actions/1",
+  "status": "frozen before native transition actions; no transition action has been run; gameplay remains unverified",
+  "native_build": "1.7.4980 rev60",
+  "author_thread": "01a14622-b914-7c81-b9ff-0e08d6436c93",
+  "procedure": {
+    "selection": "Resolve subjects from the current marked synthetic world by stable ThingID; never accept a path, save ID, pawn ID, or arbitrary method from external input.",
+    "receipt": "For each action, write a create-new JSON record containing action key and native API, subject/related IDs, full relevant before and after pawn snapshots, before/action/after game and absolute clocks, API return value, exception type/message/stack, expected transition, completion predicate, and completion result. Receipt writing is independent of Recorder.Emit and recorder journal contents.",
+    "completed": "One completed subject/family transition is one expected event. Failed API calls and no-op results declare zero expected events; this native receipt field is an expectation, not an observed recorder journal count. Root must independently flush/read back and reconcile journal counts. Batch actions stop on the first failed predicate and report completed count; no no-op or sleep is included as measured work.",
+    "same_tick": "Explicit repeated-transition actions perform a real add/remove or kill/resurrect state change each time, retain unique action sequence and receipt IDs, and may share one game tick. Journal oracle expects one event per completed transition, not one per tick."
+  },
+  "families": [
+    {
+      "family": "pawn_died",
+      "action_key": "death.kill_live_subject",
+      "native_api": "Verse.Pawn.Kill(Nullable<Verse.DamageInfo>, Verse.Hediff)",
+      "target": "alive, spawned player human pawn selected by ThingID order",
+      "operation": "Kill(null, null)",
+      "completion": "same pawn is Dead after the call and was not Dead before it; its corpse or native dead holder state is captured",
+      "negative_control": "death.kill_already_dead_subject expects unchanged Dead state and zero events",
+      "batch": "toggle the same subject through real Kill and Resurrect operations, counting one death only after each verified alive-to-dead edge"
+    },
+    {
+      "family": "pawn_resurrected",
+      "action_key": "resurrection.try_resurrect_dead_subject",
+      "native_api": "RimWorld.ResurrectionUtility.TryResurrect(Verse.Pawn, RimWorld.ResurrectionParams = default) -> bool",
+      "target": "dead pawn with a materialized corpse in the current marked world",
+      "operation": "TryResurrect(pawn) and record returned bool",
+      "completion": "API returns true and the same pawn changes from Dead to alive",
+      "negative_control": "resurrection.try_resurrect_living_subject expects false or unchanged live state and zero events",
+      "batch": "pair each completed resurrection with a native kill of the same pawn; count only verified dead-to-alive edges"
+    },
+    {
+      "family": "pawn_health_changed",
+      "action_key": "health.add_remove_nonfatal_hediff",
+      "native_api": "Verse.Pawn_HealthTracker.AddHediff(HediffDef, BodyPartRecord = null, Nullable<DamageInfo> = null, DamageResult = null) -> Hediff; RemoveHediff(Hediff)",
+      "target": "alive player human pawn plus a native-selected nonfatal removable HediffDef and non-vital body part when required",
+      "operation": "add a real Hediff instance and later remove that exact instance",
+      "completion": "exact hediff load ID, def, part, severity, and membership differ as expected in native state",
+      "negative_control": "health.remove_absent_hediff expects unchanged hediff set and zero events",
+      "batch": "alternate native add/remove of the same safe condition; each membership edge is one transition"
+    },
+    {
+      "family": "pawn_relation_changed",
+      "action_key": "relation.add_remove_direct_relation",
+      "native_api": "RimWorld.Pawn_RelationsTracker.AddDirectRelation(PawnRelationDef, Pawn); RemoveDirectRelation(PawnRelationDef, Pawn)",
+      "target": "two distinct living player human pawns with no matching directed relation before add",
+      "operation": "add then remove the exact direct relation for the exact other pawn",
+      "completion": "the directed relation type and target membership changes in the actor's native DirectRelations snapshot",
+      "negative_control": "relation.remove_absent_relation and repeated identical add each expect no state change and zero events",
+      "batch": "alternate add/remove for a valid pair; each observed edge has a unique sequence even when game tick is unchanged"
+    },
+    {
+      "family": "pawn_faction_changed",
+      "action_key": "faction.set_distinct_faction",
+      "native_api": "Verse.Pawn.SetFaction(RimWorld.Faction, Verse.Pawn)",
+      "target": "player pawn with a distinct loaded faction available in the synthetic world",
+      "operation": "set a distinct faction, then restore the original faction",
+      "completion": "same pawn has different faction unique load IDs before and after",
+      "negative_control": "set the current faction again; expect no state change and zero events",
+      "batch": "alternate between two distinct factions; count only verified faction-ID changes"
+    },
+    {
+      "family": "pawn_guest_status_changed",
+      "action_key": "guest.set_guest_status",
+      "native_api": "RimWorld.Pawn_GuestTracker.SetGuestStatus(RimWorld.Faction, RimWorld.GuestStatus)",
+      "target": "living pawn whose guest tracker can accept the pinned host/status pair",
+      "operation": "change host/status, then restore prior guest state",
+      "completion": "guest status, host faction unique ID, released, prisoner, or slave state changes",
+      "negative_control": "repeat identical host/status; expect unchanged complete guest snapshot and zero events",
+      "batch": "alternate between two accepted states and count only changed effective guest snapshots"
+    },
+    {
+      "family": "pawn_genes_changed",
+      "action_key": "genes.add_endogene/remove_exact_gene",
+      "native_api": "RimWorld.Pawn_GeneTracker.AddGene(GeneDef, bool) / RemoveGene(Gene)",
+      "target": "living pawn and a compatible gene/xenotype absent from the before snapshot",
+      "operation": "add one absent definition as an endogene, retain its returned/observed exact Gene instance, then remove that instance",
+      "completion": "same pawn has the exact new Gene load ID/def and membership in the after snapshot; removal requires that exact load ID to disappear",
+      "negative_control": "control.genes.remove_absent_gene calls native RemoveGene with an instance absent from the pawn; it expects unchanged gene membership and zero events",
+      "batch": "alternate real gene membership edges from a precomputed compatible list; do not time generation-only or no-op calls"
+    },
+    {
+      "family": "pawn_role_changed",
+      "action_key": "role.assign_formal_ideology_holder/unassign_formal_ideology_holder",
+      "native_api": "RimWorld.Precept_Role.Assign(Pawn, bool) / Unassign(Pawn, bool)",
+      "target": "pawn and an actual ideology role or royal title available in the marked world",
+      "operation": "assign a native unassigned role from the pawn Ideo, retain it, then unassign the same role",
+      "completion": "native Precept_Role.IsAssigned(pawn) changes and the pawn role-holder snapshot adds/removes that exact role definition",
+      "negative_control": "control.role.assign_same_formal_holder repeats Assign for the same pawn/role and expects unchanged role-holder state and zero events; royal titles are not implemented",
+      "batch": "alternate formal holder assignments only when each state transition is accepted by the native API"
+    },
+    {
+      "family": "pawn_holder_changed",
+      "action_key": "holder.move_subject_between_map_and_caravan",
+      "native_api": "Verse.Thing.DeSpawn(DestroyMode); Verse.Pawn.SpawnSetup(Map, bool); RimWorld.Planet.Caravan.AddPawn(Pawn, bool); RemovePawn(Pawn)",
+      "target": "living spawned pawn and a marked synthetic caravan or its creation through native CaravanUtility",
+      "operation": "Required implementation uses native CaravanMaker.MakeCaravan and Caravan.RemovePawn for a map/caravan round-trip. Additional actions exercise carrying, transporter, corpse-in-inventory, casket, vat, and world-pool holders; see holder_implementation_status.",
+      "completion": "same pawn ID has a changed complete holder chain and map/world-pool state",
+      "negative_control": "control.holder.add_duplicate_transporter_pawn attempts ThingOwner.TryAdd for the same pawn already held by that transporter; expected false and unchanged holder chain, zero events",
+      "batch": "alternate real caravan/map holder transitions; each receipt identifies actual owner chain and observation interval"
+    },
+    {
+      "family": "pawn_born",
+      "action_key": "birth.hatch_fertilized_egg",
+      "native_api": "RimWorld.CompHatcher.Hatch(); Verse.PawnUtility.TrySpawnHatchedOrBornPawn(Pawn, Thing)",
+      "target": "current-map Thing with CompHatcher; whether the native Hatch materializes a pawn is checked by before/after spawned pawn IDs",
+      "operation": "invoke native CompHatcher.Hatch(); do not call TrySpawnHatchedOrBornPawn directly",
+      "completion": "at least one new pawn ThingID appears in current map spawned-pawn set; if none appears, completion is false and expected event count is zero",
+      "negative_control": "no separate negative hatch control is provided; an unsuccessful/no-new-pawn hatch is retained as an incomplete native attempt",
+      "batch": "one distinct real hatch per completed birth; never use generated-only pawns or QuestManager notifications as births"
+    }
+  ],
+  "cross_family_controls": [
+    "RWSI Native Acceptance > Control: injected nested health failure then success verifies the installed native AddHediff(HediffDef) -> AddHediff(Hediff) IL call chain, recorder patch order, and one-shot pre-mutation exception. It records exact native and recorder prefix/finalizer invocation counts, one fault consumption, exact transient Hediff identity, expected exception type, exception details, and unchanged pawn health. The source receipt declares zero expected events only; it does not claim observed journal count. Root independently reconciles recorder journal after flush. Only when that control passes does it invoke a separate successful injury action, whose unique action receipt links the failed action ID and expects one event.",
+    "A failed/no-newborn CompHatcher.Hatch attempt is retained as an incomplete native action with zero expected events and the complete before/after spawned-pawn identity sets. The attempt is not counted as a passed failed-hatch control unless native execution actually yields no new pawn.",
+    "Repeated real transitions may share TicksGame/TicksAbs; receipt action IDs and subject IDs preserve each distinct transition.",
+    "Batch targets are at least 100 verified transitions per ordinary family and 1000 total; incomplete or no-op attempts never count toward target.",
+    "Other native controls include duplicate transporter add, absent gene removal, repeated ideology-role assignment, and failed/no-new-pawn hatching; their actual native results must be captured before they can serve as accepted controls."
+  ],
+  "source_evidence": [
+    "recorder/native-hook-audit.md (installed RimWorld 1.7.4980 metadata/decompilation selectors)",
+    "recorder/Recorder.Mod/RecorderBootstrap.cs (exact target overload selectors)",
+    "installed Assembly-CSharp.dll SHA-256 eff7d97949f919fb2b151ebfb906e9be749b63410b7dbda78eeebb7972b245c3"
+  ],
+  "batch_procedure": {
+    "debug_action": "First use RWSI Native Acceptance > Batch: pin baseline and reset progress, then RWSI Native Acceptance > Batch: continue bounded 10-family run",
+    "bounds": "at most two rounds per family and 15 seconds of elapsed wall time per invocation, checked between calls; invoke again to resume; each family stops on first missing/failed completed transition",
+    "target": "100 completed state-changing transitions per family and 1000 total; no-op/failure contributes zero",
+    "receipt": "unique create-new payload-hash envelope per invocation with per-family counts, unique successful transition action IDs, baseline state-receipt path/hash, game-session ID, marked profile/world/build scope, first blocked reason, actions and elapsed time; counts include every affected newborn subject and are derived only from native action receipts, not recorder journal acceptance",
+    "limitations": "not yet run or validated in native gameplay; birth and role/faction/guest/gene/holder family availability can block a run"
+  },
+  "tick_benchmark": {
+    "debug_actions": [
+      "RWSI Native Acceptance > Benchmark: start 2500+10000 ticks",
+      "RWSI Native Acceptance > Benchmark: cancel tick interval"
+    ],
+    "procedure": "After the root freezes baseline and config, enable/reset metrics as directed; start the same Harmony prefix/postfix Stopwatch probe in both paired conditions; unpause only through root-owned live controls; retain result receipt. Cancel writes a cancelled receipt and is not valid measured evidence.",
+    "measurement": "Harmony wraps the installed Verse.TickManager.DoSingleTick() method. Stopwatch.GetTimestamp is read immediately before and after each native method call; only successful method returns are sampled. The exact first 2500 game ticks are warmup; exactly the following 10000 distinct DoSingleTick calls are measured. This is method CPU elapsed time, not frame, IPC, or wall interval timing. The same probe and harness build are used in recorder-off and recorder-on arms.",
+    "receipt": "schema rwsi-native-tick-benchmark/2, UUID, profile/world/build identity, UTC and game/absolute tick endpoints, Stopwatch frequency, exact 10000 raw Stopwatch-tick durations, actual warmup/measured tick counts, completion status, payload_sha256",
+    "limitations": "probe registration and runtime behavior remain unverified; harness does not unpause or change gameplay; partial/cancelled runs are invalid for paired performance comparison"
+  },
+  "metrics_controls": {
+    "debug_actions": [
+      "Metrics: enable",
+      "Metrics: disable",
+      "Metrics: reset",
+      "Metrics: write snapshot receipt"
+    ],
+    "binding": "reflection-only lookup of RimWorld.LifeRecorder.RecorderDeveloperMetrics; no compile-time recorder dependency and no recorder event emission",
+    "use": "diagnostics only; snapshot output never determines expected event counts or native transition completion",
+    "limitations": "API availability and runtime values remain unverified"
+  },
+  "holder_implementation_status": {
+    "required_coverage_from_brief": [
+      "map",
+      "carried",
+      "inventory",
+      "casket",
+      "vat",
+      "corpse",
+      "caravan",
+      "transport",
+      "worldpools"
+    ],
+    "implemented_source_cases": [
+      "map to/from Caravan using CaravanMaker.MakeCaravan, Caravan.RemovePawn, GenSpawn.Spawn (used by batch)",
+      "map to/from pawn-carry holder using Pawn_CarryTracker.TryStartCarry and TryDropCarriedThing",
+      "dead pawn remains in native Corpse while corpse moves map to/from living player pawn inventory ThingOwner",
+      "map pawn to/from spawned native Building_CryptosleepCasket using TryAcceptThing and EjectContents",
+      "eligible child pawn to/from existing Building_GrowthVat using CanAcceptPawn/TryAcceptPawn and ThingOwner removal",
+      "map pawn to/from existing compatible CompTransporter ThingOwner",
+      "map pawn to/from world-pawn pool using WorldPawns.PassToWorld/RemovePawn"
+    ],
+    "acceptance_status": "source/build only; every runtime case is unverified and depends on a compatible native holder and eligible subject being present. Caravan is used by the batch. No holder family is accepted until saved XML and recorder event counts agree."
+  }
+}

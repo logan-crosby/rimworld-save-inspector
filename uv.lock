@@ -792,7 +792,7 @@ wheels = [
 
 [[package]]
 name = "rimworld-save-inspector"
-version = "1.0.0"
+version = "1.1.0b1"
 source = { editable = "." }
 dependencies = [
     { name = "defusedxml" },

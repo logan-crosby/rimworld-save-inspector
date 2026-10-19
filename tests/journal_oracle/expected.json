@@ -1,0 +1,87 @@
+{
+  "fixture_semantics": {
+    "conflict.jsonl": {
+      "alternative_count": 2,
+      "compare_entire_parsed_envelope": true,
+      "identity": [
+        "campaign-conflict",
+        "s-conflict",
+        2
+      ],
+      "origin_count": 4
+    },
+    "fork.jsonl": {
+      "child_sessions_remain_distinct": true,
+      "children": [
+        "s-left",
+        "s-right"
+      ],
+      "sessions": [
+        "s-root",
+        "s-left",
+        "s-right"
+      ],
+      "verified_parent_checkpoint": "cp-root"
+    },
+    "gap.jsonl": {
+      "dropped_count": 2,
+      "event_id": "s-gap:5",
+      "missing_ranges": [
+        [
+          2,
+          2,
+          "queue_full"
+        ],
+        [
+          4,
+          4,
+          "io_error"
+        ]
+      ],
+      "ranges_exact": true,
+      "sequence_3_present": true
+    },
+    "malformed-interior.jsonl": {
+      "invalid_line": 2,
+      "line_count": 3,
+      "source_outcome": "malformed",
+      "valid_suffix_event": "s-malformed:3"
+    },
+    "truncated-tail.jsonl": {
+      "complete_event_ids": [
+        "s-truncated:1"
+      ],
+      "final_fragment_excluded": true,
+      "source_outcome": "incomplete_tail"
+    },
+    "unknown-clock.jsonl": {
+      "all_clock_fields_null": true,
+      "preserved": true,
+      "sequences": [
+        1,
+        2
+      ],
+      "session": "s-unknown-clock",
+      "unknown_type": "future_pawn_signal"
+    },
+    "valid.jsonl": {
+      "event_ids": [
+        "s-valid:1",
+        "s-valid:2",
+        "s-valid:3"
+      ],
+      "sequence_unique": true
+    }
+  },
+  "normative_spec": "docs/superpowers/specs/2026-10-17-life-recorder-design.md",
+  "oracle_id": "synthetic-contract-v1",
+  "sha256": {
+    "conflict.jsonl": "adf27d56ec9314d1b82ded7ffc8942141f90de51ae058af051fef5b53ed5f090",
+    "fork.jsonl": "66bdf38a156efaff3bf06ce7857cf17351a392a7483c38f06b1077a4f8664e1a",
+    "gap.jsonl": "28653967096adbd2705d9ae6378d3ebb32ffde98b1a0219a4b47ffcdb4ae7305",
+    "malformed-interior.jsonl": "b87c75ad32ec3157e09a5a689c678ba2218f5c2b70f36237ab565f83d82042ca",
+    "truncated-tail.jsonl": "17065c2a2c919b4adb4a40557c775374256e3235ca46ffbbdc5b36cea0cadf54",
+    "unknown-clock.jsonl": "0de47cd04aee18f2a95c3ac839c01efe024dbe9d3d099a853062e48aa1ad4b15",
+    "valid.jsonl": "7920e2e03678b5e05df0e25ac8f7e62dc96046637b4cf2681620249c065a758f"
+  }
+}

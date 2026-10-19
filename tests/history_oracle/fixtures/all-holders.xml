@@ -1,0 +1,21 @@
+<savegame version="synthetic-1">
+  <game>
+    <world>
+      <worldPawns>
+        <pawnsAlive><li><def>Human</def><id>Human910001</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></li></pawnsAlive>
+        <pawnsDead><li><def>Human</def><id>Human910002</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></li></pawnsDead>
+        <pawnsMothballed><li><def>Human</def><id>Human910003</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></li></pawnsMothballed>
+      </worldPawns>
+      <caravanManager><caravans><li id="Caravan_A"><pawns><li Class="Pawn"><def>Human</def><id>Human910017</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></li></pawns></li></caravans></caravanManager>
+      <transportShipManager><transportShip id="Ship_A"><contents><li Class="Pawn"><def>Human</def><id>Human910018</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></li></contents></transportShip></transportShipManager>
+    </world>
+  </game>
+  <maps><li id="Map_Synthetic"><things>
+    <thing Class="Pawn" id="Thing_A" customAttr="preserve-me"><def>Human</def><id>Human910010</id><name><first>Quill</first><nick>Q</nick><last>Vale</last></name><faction>Faction_27</faction><role>Colonist</role><inventory/></thing>
+    <thing Class="Building_CryptosleepCasket" id="Casket_A"><innerContainer><innerList><li Class="Pawn"><def>Human</def><id>Human910011</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></li></innerList></innerContainer></thing>
+    <thing Class="Pawn" id="Carrier_A"><def>Human</def><id>Human910013</id><kindDef>Colonist</kindDef><faction>Faction_27</faction><carryTracker><innerContainer><innerList><li Class="Pawn"><def>Human</def><id>Human910012</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></li></innerList></innerContainer></carryTracker><inventory><innerContainer><innerList><li Class="Pawn"><def>Human</def><id>Human910014</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></li></innerList></innerContainer></inventory></thing>
+    <thing Class="Corpse" id="Corpse_A"><innerPawn Class="Pawn"><def>Human</def><id>Human910015</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></innerPawn></thing>
+    <thing Class="Building_GrowthVat" id="Vat_A"><innerContainer><innerList><li Class="Pawn"><def>Human</def><id>Human910016</id><kindDef>Colonist</kindDef><faction>Faction_27</faction></li></innerList></innerContainer></thing>
+    <thing Class="ExampleMod.PawnLike" id="Custom_A"><def>Human</def><id>Human910099</id><kindDef>Colonist</kindDef><faction>Faction_27</faction><needs><food>0.5</food></needs></thing>
+  </things></li></maps>
+</savegame>

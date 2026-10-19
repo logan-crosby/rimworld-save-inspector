@@ -1,0 +1,40 @@
+{
+  "frozen_thresholds": {
+    "critical_discovery_case_recall": "100%",
+    "overall_gold_recall": ">=90%",
+    "factual_precision": ">=98%",
+    "cited_claim_support": "100%",
+    "unsupported_causality_or_motive_claims": 0,
+    "required_unknowable_or_ambiguous_abstention": "100%",
+    "source_and_case_outcome_accounting": "100%; no mandatory skips",
+    "no_pruning_fallback_gold_retrieval": "100%",
+    "tool_calls_bytes_and_elapsed_time": "measure and report separately; no threshold invented here",
+    "optional_ranker": "compare with deterministic baseline and inspect every low-ranked gold case; scores are uncalibrated"
+  },
+  "rubric": {
+    "version": "discovery-evidence-rubric/1.0",
+    "rules": [
+      "Score a factual clause only when every material proposition is supported by the cited evidence IDs.",
+      "Entity identity requires stable saved identity or an independently validated cross-snapshot join; names alone do not join.",
+      "Contradictory observations remain separate with branch/time uncertainty visible.",
+      "Separate recorded event, state observation, observed difference, and inference.",
+      "Do not infer motive, consent, moral character, death, resurrection, or causation from absence, labels, or correlation.",
+      "Distinguish guard/role labels, xenotype labels, active effects, overridden genes, and suppression state.",
+      "Represent each participant perspective as its own evidence; do not select an objective motive without support.",
+      "Unknown, ambiguous, unsupported, and incomplete coverage require abstention with a bounded evidence-seeking follow-up.",
+      "Every supplied source and case must end as found, not found, excluded with reason, failed, or blocked; no silent pruning."
+    ]
+  },
+  "critical_discovery_cases": [
+    "PUB-CONTRADICTION-003",
+    "PUB-UNKNOWABLE-004",
+    "PUB-WRONG-PAWN-006",
+    "PUB-INCOMPLETE-COVERAGE-007",
+    "PUB-BIOLOGY-PERSPECTIVE-008",
+    "PRIV-A0-02"
+  ],
+  "schema": "rwsi-discovery-acceptance/1",
+  "status": "thresholds_and_replacement_holdout_frozen_before_candidate_evaluation",
+  "original_threshold_freeze_sha256": "591aa739e04190265978ed4ee5da0bf9276b6f39abb986e113cd9c8ad666d2a5",
+  "private_acceptance": "Mandatory local holdout; public synthetic success cannot substitute for private evidence."
+}

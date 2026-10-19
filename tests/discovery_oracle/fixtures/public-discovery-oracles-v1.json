@@ -1,0 +1,142 @@
+{
+  "schema": "rwsi-discovery-oracle/1.0",
+  "authorship": "independent synthetic cases; no product imports or private save facts",
+  "cases": [
+    {
+      "id": "PUB-ROUTINE-001",
+      "class": "routine",
+      "question": "What is known about Rowan's work and current health?",
+      "coverage": {"pawn": "complete", "work": "complete", "health": "complete"},
+      "evidence": [
+        {"id": "e-rowan-identity", "entity": "pawn:rowan", "fact": "saved identity is Rowan"},
+        {"id": "e-rowan-work", "entity": "pawn:rowan", "fact": "current saved role is cook"},
+        {"id": "e-rowan-health", "entity": "pawn:rowan", "fact": "no injury record is present in the complete health scope"}
+      ],
+      "gold": {
+        "claims": [
+          {"text": "Rowan's saved role is cook.", "support": ["e-rowan-work"]},
+          {"text": "The inspected health scope contains no injury record for Rowan.", "support": ["e-rowan-health"]}
+        ],
+        "must_abstain": [], "must_not_claim": ["Rowan is healthy in every runtime sense."], "followups": []
+      }
+    },
+    {
+      "id": "PUB-RARE-BENIGN-002",
+      "class": "rare_benign",
+      "question": "Is there anything unusual about Mira's animal handling?",
+      "coverage": {"pawn": "complete", "work": "complete", "animals": "complete"},
+      "evidence": [
+        {"id": "e-mira-role", "entity": "pawn:mira", "fact": "saved role is animal handler"},
+        {"id": "e-mira-bond", "entity": "pawn:mira", "fact": "one bonded pack animal is recorded"},
+        {"id": "e-mira-event", "entity": "pawn:mira", "fact": "a rare but benign animal-training event is recorded"}
+      ],
+      "gold": {
+        "claims": [
+          {"text": "Mira has a recorded animal-handler role and one recorded bonded pack animal.", "support": ["e-mira-role", "e-mira-bond"]},
+          {"text": "The unusual training event is recorded without a harmful outcome.", "support": ["e-mira-event"]}
+        ],
+        "must_abstain": [], "must_not_claim": ["The event proves cruelty, danger, or a hidden motive."], "followups": []
+      }
+    },
+    {
+      "id": "PUB-CONTRADICTION-003",
+      "class": "contradictory",
+      "question": "Did Sol die before the final observation?",
+      "coverage": {"pawn": "complete", "observations": "complete"},
+      "evidence": [
+        {"id": "e-sol-alive", "entity": "pawn:sol", "fact": "later snapshot contains a living pawn record for Sol"},
+        {"id": "e-sol-dead-tale", "entity": "pawn:sol", "fact": "a separate tale records Sol's death at an earlier time"},
+        {"id": "e-sol-branch", "entity": "pawn:sol", "fact": "snapshot ancestry is unproven"}
+      ],
+      "gold": {
+        "claims": [
+          {"text": "The evidence conflicts: one source records a death and another later snapshot contains a living record.", "support": ["e-sol-alive", "e-sol-dead-tale"]},
+          {"text": "The available evidence does not establish whether the snapshots share one continuous branch.", "support": ["e-sol-branch"]}
+        ],
+        "must_abstain": ["whether Sol died and was later resurrected"],
+        "must_not_claim": ["resurrection", "the death record is false"], "followups": ["Inspect the exact source records and branch relationship."]
+      }
+    },
+    {
+      "id": "PUB-UNKNOWABLE-004",
+      "class": "unknowable",
+      "question": "Why did Tavi leave the colony?",
+      "coverage": {"pawn": "partial", "departure_events": "unsupported"},
+      "evidence": [
+        {"id": "e-tavi-absent", "entity": "pawn:tavi", "fact": "Tavi is absent from the current map snapshot"},
+        {"id": "e-tavi-gap", "entity": "catalog", "fact": "no departure event is available and source coverage is partial"}
+      ],
+      "gold": {
+        "claims": [], "must_abstain": ["why Tavi left", "whether Tavi left voluntarily", "whether Tavi is dead"],
+        "must_not_claim": ["absence proves death or departure"], "followups": ["Review every compatible save and the coverage manifest."]
+      }
+    },
+    {
+      "id": "PUB-MISLEADING-NAME-005",
+      "class": "misleading_name",
+      "question": "Does the pawn named Angel have a supernatural ability?",
+      "coverage": {"identity": "complete", "abilities": "complete"},
+      "evidence": [
+        {"id": "e-angel-name", "entity": "pawn:angel", "fact": "display name is Angel"},
+        {"id": "e-angel-ability", "entity": "pawn:angel", "fact": "complete ability scope contains no supernatural ability"}
+      ],
+      "gold": {
+        "claims": [{"text": "The inspected ability scope contains no supernatural ability for this pawn.", "support": ["e-angel-ability"]}],
+        "must_abstain": [], "must_not_claim": ["a supernatural ability inferred from the pawn's name"], "followups": []
+      }
+    },
+    {
+      "id": "PUB-WRONG-PAWN-006",
+      "class": "wrong_pawn_near_match",
+      "question": "What happened to Nera, the doctor?",
+      "coverage": {"identity": "complete", "events": "complete"},
+      "evidence": [
+        {"id": "e-nera-id", "entity": "pawn:nera-17", "fact": "Nera is saved ID pawn:nera-17 and has doctor role"},
+        {"id": "e-nera-event", "entity": "pawn:nera-17", "fact": "Nera has one recorded relocation event"},
+        {"id": "e-nera-near-match", "entity": "pawn:nera-71", "fact": "Nera Two has a separate death tale"}
+      ],
+      "gold": {
+        "claims": [{"text": "Nera (saved ID pawn:nera-17) has a recorded relocation event.", "support": ["e-nera-id", "e-nera-event"]}],
+        "must_abstain": [], "must_not_claim": ["Nera died", "transfer Nera Two's event to Nera"], "followups": []
+      }
+    },
+    {
+      "id": "PUB-INCOMPLETE-COVERAGE-007",
+      "class": "incomplete_coverage",
+      "question": "List every person who was ever held in the transport shuttle.",
+      "coverage": {"map": "complete", "transport_holders": "unsupported", "catalog": "complete_for_known_sources"},
+      "evidence": [
+        {"id": "e-shuttle-one", "entity": "holder:shuttle", "fact": "one person is explicitly resolved in the supported holder records"},
+        {"id": "e-shuttle-gap", "entity": "holder:shuttle", "fact": "transport holder format is unsupported in one save"}
+      ],
+      "gold": {
+        "claims": [{"text": "At least one person is resolved in the supported transport-holder records.", "support": ["e-shuttle-one"]}],
+        "must_abstain": ["the complete historical list of shuttle occupants"],
+        "must_not_claim": ["the returned person is the complete list"], "followups": ["Inspect the unsupported-holder record in the affected save."]
+      }
+    },
+    {
+      "id": "PUB-BIOLOGY-PERSPECTIVE-008",
+      "class": "biology_perspective",
+      "question": "Does guard Eno's xenotype explain the conflict with their sibling?",
+      "coverage": {"pawn": "complete", "genes": "complete", "relations": "complete", "memories": "complete", "perspective": "partial"},
+      "evidence": [
+        {"id": "e-eno-guard", "entity": "pawn:eno", "fact": "saved role label is guard"},
+        {"id": "e-eno-xeno", "entity": "pawn:eno", "fact": "xenotype label is Xeno-A"},
+        {"id": "e-eno-active", "entity": "pawn:eno", "fact": "active gene list contains Gene-Q"},
+        {"id": "e-eno-overridden", "entity": "pawn:eno", "fact": "Gene-R is stored but marked overridden"},
+        {"id": "e-eno-memory", "entity": "pawn:eno", "fact": "a memory records a conflict with sibling Iri"},
+        {"id": "e-iri-memory", "entity": "pawn:iri", "fact": "Iri has a different memory of the same event"}
+      ],
+      "gold": {
+        "claims": [
+          {"text": "The guard role and xenotype label are saved labels; the active gene and overridden gene are separate evidence.", "support": ["e-eno-guard", "e-eno-xeno", "e-eno-active", "e-eno-overridden"]},
+          {"text": "Eno and Iri have different recorded memories of a conflict.", "support": ["e-eno-memory", "e-iri-memory"]}
+        ],
+        "must_abstain": ["whether biology caused the conflict", "either pawn's motive or consent"],
+        "must_not_claim": ["xenotype alone determines active effects or personality", "one perspective is the objective cause"],
+        "followups": ["Retrieve the source records for both memories and their observation times."]
+      }
+    }
+  ]
+}

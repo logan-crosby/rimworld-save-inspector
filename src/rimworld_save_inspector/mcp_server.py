@@ -13,6 +13,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
 
+from . import __version__
 from .errors import InspectorError
 from .models import QueryRequest
 from .schemas import SUCCESS_SCHEMAS
@@ -160,7 +161,7 @@ def _error_result(exc: InspectorError) -> CallToolResult:
 def create_server(save_path: str | Path) -> MCPServer:
     """Create an MCPServer for one configured source; creation does not read the save."""
     lifecycle = _Lifecycle(Path(save_path))
-    server = MCPServer(name="rimworld-save-inspector", version="1.0.0", log_level="ERROR")
+    server = MCPServer(name="rimworld-save-inspector", version=__version__, log_level="ERROR")
 
     async def inspect_save() -> _Response:
         try:

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<savegame>
+  <game>
+    <letterStack>
+      <letters><li>Letter_12</li><li>Letter_7</li><li>Letter_404</li></letters>
+      <letterQueue />
+    </letterStack>
+    <history>
+      <archive>
+        <archivables>
+          <li Class="StandardLetter">
+            <ID>12</ID><def>Notice</def><arrivalTick>120</arrivalTick>
+            <lookTargets><targets><li>Thing_Human1</li></targets></lookTargets>
+            <text>Human3 appears in prose but is not a saved target.</text>
+          </li>
+          <li Class="Message">
+            <ID>12</ID><def>Message</def><startingTime>5500</startingTime><startingTick>100</startingTick>
+            <lookTargets><targets><li>Human2</li></targets></lookTargets>
+            <text>The numeric ID collides with a letter but is a different class.</text>
+          </li>
+          <li Class="ChoiceLetter_GrowthMoment">
+            <ID>13</ID><def>GrowthMoment</def><arrivalTick>130</arrivalTick>
+            <pawn>Human1</pawn><lookTargets><targets><li>null</li></targets></lookTargets>
+          </li>
+          <li Class="StandardLetter">
+            <ID>7</ID><def>Notice</def><arrivalTick>70</arrivalTick>
+            <lookTargets><targets><li>Thing_Human1</li></targets></lookTargets>
+          </li>
+          <li Class="DeathLetter">
+            <ID>7</ID><def>Death</def><arrivalTick>71</arrivalTick>
+            <lookTargets><targets><li>Thing_Human2</li></targets></lookTargets>
+          </li>
+          <li Class="CustomArchive">
+            <ID>404</ID><def>Unknown</def>
+            <lookTargets><targets><li>Thing_Human1</li></targets></lookTargets>
+          </li>
+        </archivables>
+      </archive>
+    </history>
+  </game>
+</savegame>

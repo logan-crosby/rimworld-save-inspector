@@ -1,0 +1,22 @@
+{
+  "contract": "pawn-history-design/1.0",
+  "status": "proposed",
+  "requirements": [
+    {"id":"HIS-01","requirement":"One-call single-snapshot dossier includes supported materialized and referenced pawn scopes and domain metadata.","gates":["H1","H4","H5"]},
+    {"id":"HIS-02","requirement":"Normal one-call timeline automatically refreshes configured sources then examines every compatible snapshot in a pinned generation; freshness mode/window and every candidate outcome are explicit.","gates":["H2","H4","H5"]},
+    {"id":"HIS-03","requirement":"Separate campaign, pawn and event identity; no merges by names, paths, filenames or mtime alone.","gates":["H2","H3"]},
+    {"id":"HIS-04","requirement":"Distinguish absolute, game-relative, biological and wall-clock fields; preserve unknown times and normalization provenance.","gates":["H0","H3","H7"]},
+    {"id":"HIS-05","requirement":"Separate recorded events, observations, differences and inferences; missing records never prove death.","gates":["H3","H5","H7"]},
+    {"id":"HIS-06","requirement":"No automatic save ancestry; equal-tick conflicts, event conflicts and asserted branches remain explicit.","gates":["H2","H3","H7"]},
+    {"id":"HIS-07","requirement":"All semantic claims resolve to exact snapshot hashes, canonical XML paths, raw values and interpretation rules.","gates":["H1","H3","H5"]},
+    {"id":"HIS-08","requirement":"Context includes historical aliases, related people, holder chains, maps, factions, roles, mods/research and directly linked events/art.","gates":["H1","H3","H5"]},
+    {"id":"HIS-09","requirement":"Unknown/custom pawn fields remain inspectable lossless evidence with explicit unknown semantics and coverage.","gates":["H1","H4"]},
+    {"id":"HIS-10","requirement":"Read-only sources, secure bounded parsing, safe cancellation, atomic index generations and strict configured-source authority.","gates":["H1","H2","H4","H7"]},
+    {"id":"HIS-11","requirement":"Python, JSON CLI and read-only MCP use equivalent shared services; existing v1 contracts remain intact.","gates":["H4","H6"]},
+    {"id":"HIS-12","requirement":"H0-pinned private corpus and pawn cohort receive every distinct supported semantic fact in losslessly factored one-call context; caps are calibrated within 16MiB without dropping facts, and oversized results never silently truncate.","gates":["H0","H4","H5","H6"]},
+    {"id":"HIS-13","requirement":"Independent oracles precede implementation; failed attempts retained; fresh reviewer tests final packaged candidate.","gates":["H0","H7"]},
+    {"id":"HIS-14","requirement":"No private save-derived content in public source/history/distributions; no publication or host registration inferred from development.","gates":["H6","H7"]}
+  ],
+  "mandatory_gates":["H0","H1","H2","H3","H4","H5","H6","H7"],
+  "completion_rule":"Every mandatory gate must pass against the final packaged candidate; skips, missing evidence and documentation checks are not product acceptance."
+}

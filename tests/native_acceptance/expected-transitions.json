@@ -1,0 +1,21 @@
+{
+  "contract": "rwsi-native-action-oracles/1",
+  "author_thread": "01a14622-b914-7c81-b9ff-0e08d6436c93",
+  "status": "pinned before native recorder action results; not a passing result",
+  "observations": "Native before/after state and serialized XML are independent of recorder output. Each action receipt pins subjects, exact transition and game/absolute clocks.",
+  "event_counts": "Exactly one logical event for one completed subject/family transition, zero for failed or no-op transitions. Nested hook notifications retain provenance without multiplying a life event. Distinct repeated transitions remain distinct even at the same tick.",
+  "families": [
+    {"family":"pawn_died","action":"kill live subject","oracle":"alive to dead; corpse/native health and saved XML agree","events":1},
+    {"family":"pawn_resurrected","action":"real resurrection of dead subject","oracle":"dead to alive; saved XML agrees","events":1},
+    {"family":"pawn_born","action":"real fertilized-egg hatch or native human birth","oracle":"new materialized pawn actually spawned from the birth/hatch action; generated-only or failed spawn is not completion","events_per_new_subject":1},
+    {"family":"pawn_faction_changed","action":"change subject faction","oracle":"old and new faction IDs differ in native state and saved XML","events":1},
+    {"family":"pawn_guest_status_changed","action":"change subject guest status","oracle":"guest status or host faction actually changes","events":1},
+    {"family":"pawn_relation_changed","action":"add or remove one direct relation","oracle":"exact relation type and target membership actually changes","events_per_subject_transition":1},
+    {"family":"pawn_health_changed","action":"add or remove one nonfatal hediff","oracle":"exact hediff membership actually changes","events_per_subject_transition":1},
+    {"family":"pawn_genes_changed","action":"add or remove gene or change xenotype","oracle":"exact gene/xenotype state actually changes","events_per_subject_transition":1},
+    {"family":"pawn_role_changed","action":"assign/unassign a formal ideology role or royal title","oracle":"actual precept holder or royal-title state changes; story title is not a formal office","events_per_subject_transition":1},
+    {"family":"pawn_holder_changed","action":"move subject between supported holders/pools","oracle":"independent owner chain/pool changes; polling reports an observation interval","events_per_subject_transition":1}
+  ],
+  "negative_controls": ["repeat identical setter", "remove absent relation/gene/hediff", "failed hatch or spawn", "throwing nested operation followed by successful operation"],
+  "prohibited_substitutes": ["direct recorder Emit calls", "method invoked equals completed", "minimum count instead of exact logical count", "skipped family counts as passed"]
+}

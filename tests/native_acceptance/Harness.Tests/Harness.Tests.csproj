@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <PackageReference Include="xunit" Version="2.7.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.7" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <Compile Include="../Harness.Mod/AcceptanceBoundary.cs" Link="AcceptanceBoundary.cs" />
+    <Compile Include="../Harness.Mod/HolderTraversalBudget.cs" Link="HolderTraversalBudget.cs" />
+    <Compile Include="../Harness.Mod/TransitionOracle.cs" Link="TransitionOracle.cs" />
+    <Compile Include="../Harness.Mod/DoSingleTickWindow.cs" Link="DoSingleTickWindow.cs" />
+    <Compile Include="../Harness.Mod/NativeBatchActionLedger.cs" Link="NativeBatchActionLedger.cs" />
+  </ItemGroup>
+</Project>

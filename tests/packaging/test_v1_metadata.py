@@ -17,14 +17,14 @@ def test_public_version_surfaces_agree():
         r'\[\[package\]\]\nname = "rimworld-save-inspector"\nversion = "([^"]+)"', lock
     )
     assert package_entry is not None
-    assert project["project"]["version"] == __version__ == package_entry.group(1) == "1.0.0"
+    assert project["project"]["version"] == __version__ == package_entry.group(1) == "1.1.0b1"
 
 
-def test_parser_provenance_uses_v1_version(tmp_path):
+def test_parser_provenance_uses_package_version(tmp_path):
     save = tmp_path / "synthetic.rws"
     save.write_text(
         "<savegame><meta><gameVersion>1.6.1</gameVersion></meta>"
         "<game><maps><li><uniqueID>1</uniqueID><things /></li></maps></game></savegame>",
         encoding="utf-8",
     )
-    assert load_snapshot(save).parser_version == "1.0.0"
+    assert load_snapshot(save).parser_version == __version__

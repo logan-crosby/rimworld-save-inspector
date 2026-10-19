@@ -1,0 +1,358 @@
+{
+  "contract": "history-oracle/1.0",
+  "campaigns": {
+    "alpha-early.xml": "campaign-A",
+    "alpha-later.xml": "campaign-A",
+    "alpha-same-tick-alternative.xml": "campaign-A",
+    "campaign-b-same-name.xml": "campaign-B",
+    "review-missing-key.xml": "review-needed"
+  },
+  "alpha-early.xml": {
+    "strong_key": [
+      "synthetic-seed-coral",
+      "81234567",
+      "(250,1,250)",
+      "5500",
+      "52500",
+      "42,0"
+    ],
+    "snapshot_abs_tick": 53230,
+    "pawns": [
+      {
+        "id": "pawn-alpha-01",
+        "name": "Founder",
+        "scope": "map:Map_A",
+        "role": "Colonist",
+        "birth_abs": 53230,
+        "bio_age_duration": 900,
+        "inventory": "empty"
+      },
+      {
+        "id": "pawn-casket-07",
+        "name": "Inside",
+        "scope": "map:Map_A/casket:Casket_A",
+        "role": null,
+        "birth_abs": null,
+        "bio_age_duration": null,
+        "inventory": null
+      },
+      {
+        "id": "pawn-carrier-08",
+        "name": "Holder",
+        "scope": "map:Map_A",
+        "role": null,
+        "birth_abs": null,
+        "bio_age_duration": null,
+        "inventory": null
+      },
+      {
+        "id": "pawn-carried-09",
+        "name": "Nested",
+        "scope": "map:Map_A/carry:pawn-carrier-08",
+        "role": null,
+        "birth_abs": null,
+        "bio_age_duration": null,
+        "inventory": null
+      }
+    ],
+    "events": [
+      {
+        "id": "Tale_1",
+        "kind": "Arrived",
+        "raw_abs": 52490,
+        "normalized_game_tick": -10,
+        "status": "pre-arrival"
+      }
+    ],
+    "unknown_nodes": [
+      "{urn:synthetic}opaque"
+    ]
+  },
+  "alpha-later.xml": {
+    "snapshot_abs_tick": 53400,
+    "pawns": [
+      {
+        "id": "pawn-alpha-01",
+        "name": "Nova V",
+        "scope": "map:Map_A",
+        "role": "Leader",
+        "birth_abs": 53230,
+        "bio_age_duration": 1900,
+        "inventory": "empty"
+      }
+    ],
+    "events": [
+      {
+        "id": "Tale_1",
+        "kind": "Arrived",
+        "raw_abs": 52490,
+        "normalized_game_tick": -10,
+        "status": "pre-arrival"
+      },
+      {
+        "id": "Tale_2",
+        "kind": "FutureEvent",
+        "raw_abs": 53450,
+        "normalized_game_tick": 950,
+        "status": "future-contradiction"
+      },
+      {
+        "id": "Tale_3",
+        "kind": "UnknownTime",
+        "raw_abs": null,
+        "normalized_game_tick": null,
+        "status": "unknown"
+      }
+    ],
+    "explicit_empty_traits": true
+  },
+  "alpha-same-tick-alternative.xml": {
+    "snapshot_abs_tick": 53400,
+    "role": "Prisoner",
+    "event_kind": "ArrivedChanged"
+  },
+  "campaign-b-same-name.xml": {
+    "snapshot_abs_tick": 53734,
+    "pawn_id": "pawn-alpha-01",
+    "campaign": "campaign-B"
+  },
+  "review-missing-key.xml": {
+    "missing": "startingTile",
+    "classification": "review-needed"
+  },
+  "invalid_sources": {
+    "malformed.xml": "malformed-xml",
+    "truncated.xml": "truncated-xml"
+  },
+  "semantic_rules": {
+    "campaign_fields": [
+      "seedString",
+      "persistentRandomValue",
+      "initialMapSize",
+      "startingYear",
+      "gameStartAbsTick",
+      "startingTile"
+    ],
+    "same_tick_alternative_pair": [
+      "alpha-later.xml",
+      "alpha-same-tick-alternative.xml"
+    ],
+    "same_pawn_id_across_campaigns_is_not_joined": true,
+    "exact_reference_match_only": true,
+    "missing_collection_is_not_empty": true,
+    "biological_age_is_duration_not_event_time": true,
+    "lineage_status": "unproven",
+    "event_occurrences": {
+      "Tale_1": {
+        "same_payload_snapshots": [
+          "alpha-early.xml",
+          "alpha-later.xml"
+        ],
+        "conflicting_payload_snapshot": "alpha-same-tick-alternative.xml",
+        "rule": "one event ID plus conflicting canonical payload/time is a conflict set; preserve all origins"
+      }
+    },
+    "alias_observations": {
+      "pawn-alpha-01": [
+        {
+          "snapshot": "alpha-early.xml",
+          "name": "Founder"
+        },
+        {
+          "snapshot": "alpha-later.xml",
+          "name": "Nova V"
+        }
+      ],
+      "rule": "do not overwrite historical alias with latest name"
+    },
+    "empty_vs_absent": {
+      "pawn-alpha-01.inventory": "empty",
+      "pawn-casket-07.inventory": "absent",
+      "rule": "absence does not equal explicit empty"
+    }
+  },
+  "native-path-shape.xml": {
+    "root": "savegame",
+    "campaign_paths": {
+      "seedString": "/savegame/game/world/info/seedString",
+      "persistentRandomValue": "/savegame/game/world/info/persistentRandomValue",
+      "initialMapSize": "/savegame/game/world/info/initialMapSize",
+      "startingYear": "/savegame/game/tickManager/startingYear",
+      "gameStartAbsTick": "/savegame/game/tickManager/gameStartAbsTick",
+      "startingTile": "/savegame/game/info/startingTile"
+    },
+    "strong_key": [
+      "synthetic-seed-coral",
+      "81234567",
+      "(250,1,250)",
+      "5500",
+      "52500",
+      "42,0"
+    ],
+    "snapshot_abs_tick": 54500
+  },
+  "all-holders.xml": {
+    "included": [
+      {
+        "id": "Human910001",
+        "path": "savegame[1]/game[1]/world[1]/worldPawns[1]/pawnsAlive[1]/li[1]",
+        "holder_chain": [],
+        "class": null,
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-known-world-pool"
+      },
+      {
+        "id": "Human910002",
+        "path": "savegame[1]/game[1]/world[1]/worldPawns[1]/pawnsDead[1]/li[1]",
+        "holder_chain": [],
+        "class": null,
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-known-world-pool"
+      },
+      {
+        "id": "Human910003",
+        "path": "savegame[1]/game[1]/world[1]/worldPawns[1]/pawnsMothballed[1]/li[1]",
+        "holder_chain": [],
+        "class": null,
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-known-world-pool"
+      },
+      {
+        "id": "Human910017",
+        "path": "savegame[1]/game[1]/world[1]/caravanManager[1]/caravans[1]/li[1]/pawns[1]/li[1]",
+        "holder_chain": [
+          "Caravan_A"
+        ],
+        "class": "Pawn",
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-class-pawn"
+      },
+      {
+        "id": "Human910018",
+        "path": "savegame[1]/game[1]/world[1]/transportShipManager[1]/transportShip[1]/contents[1]/li[1]",
+        "holder_chain": [
+          "Ship_A"
+        ],
+        "class": "Pawn",
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-class-pawn"
+      },
+      {
+        "id": "Human910011",
+        "path": "savegame[1]/maps[1]/li[1]/things[1]/thing[2]/innerContainer[1]/innerList[1]/li[1]",
+        "holder_chain": [
+          "Map_Synthetic",
+          "Casket_A"
+        ],
+        "class": "Pawn",
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-class-pawn"
+      },
+      {
+        "id": "Human910013",
+        "path": "savegame[1]/maps[1]/li[1]/things[1]/thing[3]",
+        "holder_chain": [
+          "Map_Synthetic",
+          "Carrier_A"
+        ],
+        "class": "Pawn",
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-class-pawn"
+      },
+      {
+        "id": "Human910012",
+        "path": "savegame[1]/maps[1]/li[1]/things[1]/thing[3]/carryTracker[1]/innerContainer[1]/innerList[1]/li[1]",
+        "holder_chain": [
+          "Map_Synthetic",
+          "Carrier_A"
+        ],
+        "class": "Pawn",
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-class-pawn"
+      },
+      {
+        "id": "Human910014",
+        "path": "savegame[1]/maps[1]/li[1]/things[1]/thing[3]/inventory[1]/innerContainer[1]/innerList[1]/li[1]",
+        "holder_chain": [
+          "Map_Synthetic",
+          "Carrier_A"
+        ],
+        "class": "Pawn",
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-class-pawn"
+      },
+      {
+        "id": "Human910015",
+        "path": "savegame[1]/maps[1]/li[1]/things[1]/thing[4]/innerPawn[1]",
+        "holder_chain": [
+          "Map_Synthetic",
+          "Corpse_A"
+        ],
+        "class": "Pawn",
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-class-pawn"
+      },
+      {
+        "id": "Human910016",
+        "path": "savegame[1]/maps[1]/li[1]/things[1]/thing[5]/innerContainer[1]/innerList[1]/li[1]",
+        "holder_chain": [
+          "Map_Synthetic",
+          "Vat_A"
+        ],
+        "class": "Pawn",
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "included-class-pawn"
+      }
+    ],
+    "unknown_candidates": [
+      {
+        "id": "Human910099",
+        "path": "savegame[1]/maps[1]/li[1]/things[1]/thing[6]",
+        "holder_chain": [
+          "Map_Synthetic",
+          "Custom_A"
+        ],
+        "class": "ExampleMod.PawnLike",
+        "def": "Human",
+        "kindDef": "Colonist",
+        "faction": "Faction_27",
+        "disposition": "unverified-derived-class-candidate"
+      }
+    ],
+    "direct_map_raw_unknown_attributes": {
+      "Class": "Pawn",
+      "customAttr": "preserve-me"
+    },
+    "direct_map_ordered_children": [
+      "def",
+      "id",
+      "name",
+      "faction",
+      "role",
+      "inventory"
+    ],
+    "known_path_note": "Map thing, innerContainer/innerList/li, carryTracker/innerContainer/innerList/li, and world dead/mothballed pool paths reflect raw source shapes. Caravan, transport, corpse, vat, inventory, and world-alive paths are synthetic coverage only; unknown custom class remains candidate, not an accepted pawn."
+  }
+}

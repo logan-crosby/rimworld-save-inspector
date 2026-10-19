@@ -1,0 +1,59 @@
+{
+  "contract": "life-recorder-native-acceptance/1",
+  "author_thread": "01a14622-b914-7c81-b9ff-0e08d6436c93",
+  "status": "predeclared acceptance procedure; no gameplay or performance result",
+  "profile": "native-1.7.4980",
+  "isolation": {
+    "new_disposable_savedata_profile": true,
+    "original_saves_loaded": false,
+    "other_runtime_control": false,
+    "process_guard": "full executable plus process start time",
+    "minimum_free_disk_bytes": 2684354560,
+    "stop_memory_pressure_level_at_or_above": 4,
+    "screenshots": "start, milestones, failure before recovery, end; unique tick/UTC/event names"
+  },
+  "fixture": {
+    "seed": "rwsi-native-gates-v1",
+    "creation": "new vanilla colony with installed DLC and the isolated development bridge; recorder absent",
+    "target_map_population": {"humans": 10, "animals": 10, "mechanoids": 5},
+    "world_pawns": "retain and census the generated world population",
+    "source_of_truth": "immutable serialized baseline save hash, game build, active-mod hashes and complete pawn census recorded before timing",
+    "same_fixture_for_every_pair": true,
+    "parameter_changes": "new named attempt and new baseline; never inherit old measurements"
+  },
+  "functional": {
+    "real_native_actions_only": true,
+    "direct_recorder_emit_for_native_success": false,
+    "required_families": ["pawn_died", "pawn_resurrected", "pawn_born", "pawn_faction_changed", "pawn_guest_status_changed", "pawn_relation_changed", "pawn_health_changed", "pawn_genes_changed", "pawn_role_changed", "pawn_holder_changed"],
+    "before_after_oracles": "independent native state and saved XML; event IDs, subjects, payload, clocks and durable journal must reconcile",
+    "failed_noop_actions": "must not produce completed transitions",
+    "holders": ["map", "carried", "inventory", "casket", "growth_vat", "corpse", "caravan", "transport", "world_alive", "world_dead", "world_mothballed"],
+    "lifecycle": ["install", "load", "save", "save_as", "older_checkpoint_fork", "remove", "reinstall", "failed_save", "reload_replay"],
+    "scope_semantics": "observed holder changes retain observation intervals; snapshots alone do not become exact movement events"
+  },
+  "performance": {
+    "paired_runs": 3,
+    "warmup_ticks_per_run": 2500,
+    "measured_ticks_per_run": 10000,
+    "run_order": ["off", "on", "on", "off", "off", "on"],
+    "fixed_speed": "pin observed native speed in the baseline receipt before timing",
+    "fresh_process_and_original_baseline_per_run": true,
+    "baseline_mutation": false,
+    "logger_off": "recorder package absent; bridge and DLC unchanged",
+    "median_ms_per_tick_overhead_max_percent": 2,
+    "ordinary_hook_measurement": {
+      "scope": "sum of recorder-owned prefix and postfix capture, comparison and enqueue time for one native invocation; exclude original game method execution",
+      "minimum_total_samples": 1000,
+      "minimum_samples_per_required_family": 100,
+      "p95_max_ms": 0.1,
+      "acceptance_grouping": "each ordinary collector family separately; also report pooled results",
+      "baseline_and_checkpoint_flush": "measure separately; do not hide them in ordinary hook results",
+      "percentile": "nearest rank, ceil(0.95*n), sorted elapsed samples"
+    },
+    "retained_queue_max_bytes": 16777216,
+    "steady_state_process_memory_increment_max_bytes": 33554432,
+    "storage_faults_and_overflow": "owned disposable synthetic copies only",
+    "unstable_runs": "retain as failed or uncertain and rerun the affected pair; never revise thresholds after seeing a failure"
+  },
+  "final_acceptance": "fresh reviewer reproduces consequential packaged, native, chronology, branch, fault, preservation and performance evidence against exact final artifacts"
+}

@@ -1,0 +1,1 @@
+<savegame><game><info><startingTile>42,0</startingTile></info><world><info><seedString>synthetic-seed-coral</seedString><persistentRandomValue>81234567</persistentRandomValue><initialMapSize>(250,1,250)</initialMapSize></info></world><tickManager><startingYear>5500</startingYear><gameStartAbsTick>52500</gameStartAbsTick><ticksGame>2000</ticksGame></tickManager></game></savegame>

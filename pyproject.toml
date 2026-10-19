@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rimworld-save-inspector"
-version = "1.0.0"
+version = "1.1.0b1"
 description = "Read-only structured inspection of RimWorld save files"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,17 +32,20 @@ packages = ["src/rimworld_save_inspector"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "src/rimworld_save_inspector",
-  "docs/design.md",
-  "docs/rimworld-save-inspector",
-  "examples",
-  "CHANGELOG.md",
-  "README.md",
-  "LICENSE",
-  "pyproject.toml",
-  "uv.lock",
+  "/src/rimworld_save_inspector",
+  "/docs/design.md",
+  "/docs/rimworld-save-inspector",
+  "/docs/recorder",
+  "/docs/requirements",
+  "/docs/superpowers/specs",
+  "/examples",
+  "/CHANGELOG.md",
+  "/README.md",
+  "/LICENSE",
+  "/pyproject.toml",
+  "/uv.lock",
 ]
-exclude = [".private", "evidence", "briefs", "tests", "**/__pycache__", "**/*.pyc"]
+exclude = [".private", ".superpowers", ".codex", ".agents", "evidence", "briefs", "tests", "**/__pycache__", "**/*.pyc"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"

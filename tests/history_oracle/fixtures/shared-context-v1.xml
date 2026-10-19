@@ -1,0 +1,15 @@
+<savegame>
+  <meta><gameVersion>1.6.4535</gameVersion><modIds><li>ludeon.rimworld</li><li>synthetic.context</li></modIds><modNames><li>Core</li><li>Synthetic Context</li></modNames></meta>
+  <game>
+    <tickManager><ticksGame>730</ticksGame><gameStartAbsTick>52500</gameStartAbsTick><startingYear>5500</startingYear></tickManager>
+    <info><startingTile>42,0</startingTile></info>
+    <world><info><seedString>synthetic-shared-context</seedString><persistentRandomValue>81234567</persistentRandomValue><initialMapSize>(250, 1, 250)</initialMapSize></info><factionManager><allFactions><li><def>PlayerColony</def><loadID>27</loadID><name>Coral Union</name></li></allFactions></factionManager></world>
+    <maps><li><uniqueID>1</uniqueID><info><size>(250, 1, 250)</size><parent>Settlement_103</parent><tile>42,0</tile></info><things>
+      <thing Class="Pawn"><def>Human</def><id>Human123</id><kindDef>Colonist</kindDef><name><first>Nova</first><nick>Founder</nick><last>Vale</last></name><faction>Faction_27</faction></thing>
+      <thing Class="Building_Art"><def>SculptureSmall</def><id>SculptureSmall7</id><comps><li Class="CompArt"><authorName>Nova Vale</authorName><title>Quiet Harbor</title><taleRef><tale>Tale_42</tale><seed>17</seed></taleRef><opaque xmlns:x="urn:shared-context">before <x:part importance="low">remember</x:part> after</opaque></li></comps></thing>
+    </things></li></maps>
+    <researchManager><currentProj>Electricity</currentProj><progress><keys><li>Electricity</li><li>Stonecutting</li></keys><values><li>150.5</li><li>300</li></values></progress></researchManager>
+    <scenario><name>Synthetic Shared Start</name><parts><li Class="ScenPart_StartingThing_Defined"><thingDef>Steel</thingDef><count>40</count></li></parts></scenario>
+    <taleManager><tales><li Class="Tale"><id>Tale_42</id><def>Arrived</def><occurred>52490</occurred><pawn>Human123</pawn></li></tales></taleManager>
+  </game>
+</savegame>

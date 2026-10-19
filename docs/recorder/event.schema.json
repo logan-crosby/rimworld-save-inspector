@@ -1,0 +1,29 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://rimworld-save-inspector.local/schemas/recorder-event-1.0.json",
+  "title":"Life Recorder event 1.0",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schema_version","recorder_version","game_version","campaign_id","session_id","sequence","event_id","event_type","ticks_game","ticks_abs","game_start_abs_tick","subject_id","related_ids","map_id","checkpoint_id","source","payload"],
+  "properties":{
+    "schema_version":{"const":"1.0"},
+    "recorder_version":{"type":"string","minLength":1},
+    "game_version":{"type":"string","minLength":1},
+    "campaign_id":{"type":"string","minLength":1},
+    "session_id":{"type":"string","minLength":1},
+    "sequence":{"type":"integer","minimum":1},
+    "event_id":{"type":"string","minLength":3},
+    "event_type":{"type":"string","minLength":1},
+    "ticks_game":{"type":["integer","null"]},
+    "ticks_abs":{"type":["integer","null"]},
+    "game_start_abs_tick":{"type":["integer","null"]},
+    "subject_id":{"type":["string","null"],"minLength":1},
+    "related_ids":{"type":"array","uniqueItems":true,"items":{"type":"string","minLength":1}},
+    "map_id":{"type":["string","null"],"minLength":1},
+    "checkpoint_id":{"type":["string","null"],"minLength":1},
+    "source":{"type":"object","additionalProperties":false,"required":["collector","semantics"],"properties":{"collector":{"type":"string","minLength":1},"semantics":{"enum":["recorded_event","state_observation","observed_difference","coverage"]}}},
+    "payload":{"type":"object"},
+    "extensions":{"type":"object"}
+  },
+  "$comment":"Cross-field event identity, clocks, ancestry, watermarks and gap-range sums require semantic validation under the normative design; JSON Schema alone cannot certify them."
+}

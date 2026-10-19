@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>Life Recorder (development candidate)</name>
+  <packageId>logan.crosby.rimworld.life-recorder</packageId>
+  <author>Logan Crosby</author>
+  <modVersion>0.1.0</modVersion>
+  <description>Optional local structured pawn-event journals. Development candidate: recorder core and reference builds are available, while native hook coverage, save ancestry and runtime compatibility remain unverified. No game or RimAI service connection is used.</description>
+</ModMetaData>

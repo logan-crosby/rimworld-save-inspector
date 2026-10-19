@@ -55,6 +55,73 @@ def _parser() -> argparse.ArgumentParser:
     mcp = commands.add_parser("mcp", help="run the optional read-only MCP stdio server")
     mcp.add_argument("--save", required=True, help="path to the configured RimWorld save file")
     mcp.add_argument("--verbose", action="store_true")
+
+    journal = commands.add_parser("journal", help="read a local Life Recorder JSONL journal")
+    journal.add_argument("path", help="journal segment or directory")
+    journal.add_argument("--pawn-id")
+    journal.add_argument("--session-id")
+    journal.add_argument("--include-source-path", action="store_true")
+
+    journal_mcp = commands.add_parser("journal-mcp", help="run the optional read-only journal MCP server")
+    journal_mcp.add_argument("--journal", required=True, help="configured journal segment or directory")
+    journal_mcp.add_argument("--verbose", action="store_true")
+
+    catalog = commands.add_parser("catalog", help="build, refresh or inspect a history save catalog")
+    catalog_commands = catalog.add_subparsers(dest="catalog_command", required=True)
+    catalog_build = catalog_commands.add_parser("build")
+    catalog_build.add_argument("source", help="explicit save directory")
+    catalog_build.add_argument("--output", required=True, help="application-owned SQLite catalog")
+    catalog_build.add_argument("--recursive", action="store_true")
+    catalog_build.add_argument("--manifest", help="JSON array of explicitly selected source paths")
+    catalog_refresh = catalog_commands.add_parser("refresh")
+    catalog_refresh.add_argument("catalog")
+    catalog_refresh.add_argument("--freshness", choices=("metadata", "strict"), default="metadata")
+    catalog_inspect = catalog_commands.add_parser("inspect")
+    catalog_inspect.add_argument("catalog")
+    catalog_inspect.add_argument("--freshness", choices=("metadata", "strict", "frozen"), default="metadata")
+    catalog_inspect.add_argument("--generation-id")
+
+    dossier = commands.add_parser("dossier", help="one-save or catalog pawn dossier")
+    dossier.add_argument("source")
+    dossier.add_argument("--snapshot-id")
+    dossier.add_argument("--generation-id", help="read a retained immutable generation")
+    dossier.add_argument("--pawn-id")
+    dossier.add_argument("--name")
+    dossier.add_argument("--detail", choices=("context", "full"), default="context")
+    timeline = commands.add_parser("timeline", help="one-call pawn history across a catalog")
+    timeline.add_argument("catalog")
+    timeline.add_argument("--anchor", dest="anchor_snapshot_id")
+    timeline.add_argument("--generation-id", help="read a retained immutable generation")
+    timeline.add_argument("--pawn-id")
+    timeline.add_argument("--name")
+    timeline.add_argument("--detail", choices=("context", "full"), default="context")
+    timeline.add_argument("--domain", dest="domains", action="append")
+    timeline.add_argument("--freshness", choices=("metadata", "strict", "frozen"), default="metadata")
+    timeline.add_argument("--journal", help="optional configured Life Recorder journal")
+    evidence = commands.add_parser("evidence", help="retrieve retained history source evidence")
+    evidence.add_argument("catalog")
+    evidence.add_argument("evidence_id")
+    evidence.add_argument("--cursor")
+    evidence.add_argument("--limit", type=int)
+    events = commands.add_parser("events", help="page retained events including participantless records")
+    events.add_argument("catalog")
+    events.add_argument("--anchor", dest="anchor_snapshot_id")
+    events.add_argument("--generation-id")
+    events.add_argument("--snapshot-id")
+    events.add_argument("--saved-event-id")
+    events.add_argument("--cursor")
+    events.add_argument("--limit", type=int, default=50)
+    events.add_argument("--freshness", choices=("metadata", "strict", "frozen"), default="metadata")
+    discover = commands.add_parser("discover", help="first-pass offline discovery without a pawn selector")
+    discover.add_argument("catalog")
+    discover.add_argument("--anchor", dest="anchor_snapshot_id")
+    discover.add_argument("--generation-id")
+    discover.add_argument("--freshness", choices=("metadata", "strict", "frozen"), default="metadata")
+    discover.add_argument("--skeptic-limit", type=int, default=5)
+    history_mcp = commands.add_parser("history-mcp", help="run configured read-only history MCP server")
+    history_mcp.add_argument("--catalog", required=True)
+    history_mcp.add_argument("--journal", help="optional configured Life Recorder journal")
+    history_mcp.add_argument("--verbose", action="store_true")
     return parser
 
 
@@ -117,6 +184,68 @@ def _dispatch_mcp(save: str, verbose: bool) -> int:
         return 130
 
 
+def _dispatch_journal_mcp(journal: str, verbose: bool) -> int:
+    try:
+        from . import journal_mcp
+    except ImportError:
+        _write_json(_error("MCP_EXTRA_REQUIRED", "Install the optional MCP server component to use this command."))
+        return 2
+    try:
+        return int(journal_mcp.main(journal_path=journal, verbose=verbose) or 0)
+    except InspectorError as exc:
+        _write_json(exc.as_dict())
+        return 2
+    except KeyboardInterrupt:
+        _write_json(_error("CANCELLED", "The journal MCP server was interrupted."))
+        return 130
+
+
+def _dispatch_history(args: argparse.Namespace) -> int:
+    from .history import catalog as history_catalog
+    from .history.service import get_dossier, get_evidence, get_events, get_timeline
+
+    if args.command == "catalog":
+        if args.catalog_command == "build":
+            result = history_catalog.build_catalog(args.source, args.output,
+                                                   recursive=args.recursive,
+                                                   manifest=args.manifest)
+        elif args.catalog_command == "refresh":
+            result = history_catalog.refresh_catalog(args.catalog, freshness=args.freshness)
+        else:
+            result = history_catalog.inspect_catalog(args.catalog,
+                                                     generation_id=args.generation_id,
+                                                     freshness=args.freshness)
+    elif args.command == "dossier":
+        result = get_dossier(args.source, pawn_id=args.pawn_id, name=args.name,
+                             snapshot_id=args.snapshot_id, detail=args.detail,
+                             generation_id=args.generation_id)
+    elif args.command == "timeline":
+        result = get_timeline(args.catalog, pawn_id=args.pawn_id, name=args.name,
+                              anchor_snapshot_id=args.anchor_snapshot_id,
+                              detail=args.detail, domains=args.domains,
+                              freshness=args.freshness, journal_path=args.journal,
+                              generation_id=args.generation_id)
+    elif args.command == "evidence":
+        result = get_evidence(args.catalog, args.evidence_id,
+                              cursor=args.cursor, limit=args.limit)
+    elif args.command == "events":
+        result = get_events(args.catalog, anchor_snapshot_id=args.anchor_snapshot_id,
+                            generation_id=args.generation_id, snapshot_id=args.snapshot_id,
+                            saved_event_id=args.saved_event_id, cursor=args.cursor,
+                            limit=args.limit, freshness=args.freshness)
+    elif args.command == "discover":
+        from .discovery import discover_catalog
+        result = discover_catalog(args.catalog, anchor_snapshot_id=args.anchor_snapshot_id,
+                                  generation_id=args.generation_id, freshness=args.freshness,
+                                  skeptic_limit=args.skeptic_limit)
+    else:
+        from .history import mcp as history_mcp
+        return history_mcp.main(catalog_path=args.catalog, verbose=args.verbose,
+                                journal_path=args.journal)
+    _write_json(result)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     try:
@@ -125,6 +254,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise _ArgumentError("a command is required")
         if args.command == "mcp":
             return _dispatch_mcp(args.save, args.verbose)
+        if args.command == "journal-mcp":
+            return _dispatch_journal_mcp(args.journal, args.verbose)
+        if args.command == "journal":
+            from .journal import read_journal
+            _write_json(read_journal(args.path, pawn_id=args.pawn_id, session_id=args.session_id,
+                                     include_source_path=args.include_source_path))
+            return 0
+        if args.command in {"catalog", "dossier", "timeline", "evidence", "events", "discover", "history-mcp"}:
+            return _dispatch_history(args)
 
         query_name = "inspect" if args.query == "metadata" else args.query
         filters = _filters(args)
@@ -142,7 +280,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         _write_json(_error("INVALID_ARGUMENT", str(exc)))
         return 2
     except InspectorError as exc:
-        _write_json(exc.as_dict())
+        if getattr(args if "args" in locals() else None, "command", None) in {
+            "catalog", "dossier", "timeline", "evidence", "events", "discover", "history-mcp"
+        }:
+            _write_json({"history_schema_version": "1.0", "error": {
+                "code": exc.code, "message": exc.message, "details": exc.details,
+                "retryable": exc.retryable,
+            }})
+        else:
+            _write_json(exc.as_dict())
         if getattr(args if "args" in locals() else None, "verbose", False):
             print(f"{exc.code}: {exc.message}", file=sys.stderr)
         return 2

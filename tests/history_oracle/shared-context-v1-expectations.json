@@ -1,0 +1,20 @@
+{
+  "schema": "independent-shared-context-expectations/1",
+  "author_thread": "01a14622-b914-7c81-b9ff-0e08d6436c93",
+  "fixture": "fixtures/shared-context-v1.xml",
+  "basis": "Synthetic saved fields authored independently before shared-context candidate evaluation; raw XML assertions, not inferred art narrative.",
+  "required_context_domains": ["maps", "factions", "mods", "research", "scenario", "art"],
+  "expected_materialized_pawn_ids": ["Human123"],
+  "expected_raw_values_by_domain": {
+    "maps": ["1", "(250, 1, 250)", "Settlement_103", "42,0"],
+    "factions": ["PlayerColony", "27", "Coral Union"],
+    "mods": ["ludeon.rimworld", "synthetic.context", "Core", "Synthetic Context"],
+    "research": ["Electricity", "Stonecutting", "150.5", "300"],
+    "scenario": ["Synthetic Shared Start", "Steel", "40"],
+    "art": ["Nova Vale", "Quiet Harbor", "Tale_42", "17"]
+  },
+  "required_art_exact_link_target": "Tale_42",
+  "forbidden_art_inferences": ["motive", "author_is_Human123_from_name", "art_event_time_from_observation"],
+  "raw_retention": "Art opaque element retains namespace, attribute order, mixed text and tail exactly through generation-bound evidence retrieval.",
+  "negative_variants": ["missing domain is absent", "explicit empty domain is observed empty", "unsupported custom art class remains raw with unsupported interpretation", "same-title other pawn must not join by name"]
+}

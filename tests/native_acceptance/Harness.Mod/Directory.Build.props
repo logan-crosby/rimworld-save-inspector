@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>obj/native-1.7.4980/</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <BaseOutputPath>bin/native-1.7.4980/</BaseOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/obj/**;**/bin/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

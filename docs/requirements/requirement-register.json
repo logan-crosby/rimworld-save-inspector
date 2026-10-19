@@ -1,0 +1,1483 @@
+{
+  "schema": "rwsi-requirement-register/1.0",
+  "status": "A0_RECONCILED_ORACLES_FROZEN_PRODUCT_ACCEPTANCE_PENDING",
+  "author": "Codex subtask /root/discovery_oracles",
+  "policy": "v2026.09.26.1",
+  "beads": "raf-8j5",
+  "sources": {
+    "G-spec": {
+      "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96",
+      "scope": "RWSI-1.0; R01-R20; gates G0-G7",
+      "visibility": "private",
+      "private_binding_required": true
+    },
+    "G-oracle": {
+      "sha256": "2c11e1abc62f457e53f578e4223792a1bd19bc81522632f2673e88ae180c2512",
+      "scope": "normative private integration expectations; private only",
+      "visibility": "private",
+      "private_binding_required": true
+    },
+    "H-spec": {
+      "path": "docs/superpowers/specs/2026-10-17-pawn-history-design.md",
+      "sha256": "3a3823717926d64d7ac01040b73cc5bf50738af2f6e7236a7639fd760c68ad29",
+      "scope": "pawn-history-design/1.0"
+    },
+    "H-requirements": {
+      "path": "docs/superpowers/specs/2026-10-17-pawn-history-requirements.json",
+      "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a",
+      "scope": "HIS-01-HIS-14; H0-H7"
+    },
+    "L-spec": {
+      "path": "docs/superpowers/specs/2026-10-17-life-recorder-design.md",
+      "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c",
+      "scope": "normative recorder design; L0-L7"
+    },
+    "A-goal": {
+      "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a",
+      "scope": "consolidated completion directive; A0-A7",
+      "visibility": "private",
+      "private_binding_required": true
+    },
+    "research-packet": {
+      "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53",
+      "scope": "research recommendations P1-P5 and open questions",
+      "visibility": "private",
+      "private_binding_required": true
+    },
+    "source-cards": {
+      "sha256": "2e6e96a103d083b337b24d1b1ff056df46f7bedb551674789baf1908d4b029fe",
+      "scope": "bounded primary-source evidence cards",
+      "visibility": "private",
+      "private_binding_required": true
+    },
+    "G-public-contract": {
+      "path": "docs/design.md",
+      "sha256": "5f404084732c2875486cab9ab31e6f6b453ec72de2f10b43aaf2b1b8d8a75d1e",
+      "scope": "Active sanitized RWSI-1.0 revision2026-10-17.1; original private baseline remains independently required."
+    }
+  },
+  "requirements": [
+    {
+      "id": "G-R01",
+      "requirement": "Independent installable package and declared Python/platform support",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R01",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G1,G7 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R02",
+      "requirement": "Preserve saves; no runtime network or mutation interface",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R02",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G2,G5,G6 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R03",
+      "requirement": "Immutable snapshots, source change detection and cancellation",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R03",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G2,G5,G6 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R04",
+      "requirement": "Hardened bounded streaming parser with explicit limit failures",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R04",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G2,G6 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R05",
+      "requirement": "Typed identities, references, duplicate handling and provenance",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R05",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G2,G3 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R06",
+      "requirement": "Explicit population/location scopes without double counting",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R06",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G2,G3 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R07",
+      "requirement": "Colony summary contract",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R07",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G2,G3 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R08",
+      "requirement": "Pawn details contract",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R08",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G3 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R09",
+      "requirement": "Health contract",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R09",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G3 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R10",
+      "requirement": "Gene contract including active/overridden distinctions",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R10",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G3 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R11",
+      "requirement": "Equipment, apparel, inventory, holder and nested-record contract",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R11",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G3 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R12",
+      "requirement": "Research contract",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R12",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G3 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R13",
+      "requirement": "Saved mod-list contract",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R13",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G3 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R14",
+      "requirement": "Absent, explicit-null, invalid and derived values remain distinguishable",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R14",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G2,G3,G4 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R15",
+      "requirement": "Versioned JSON, deterministic paging and bounded responses",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R15",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G4,G5 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R16",
+      "requirement": "CLI output, errors and exit semantics",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R16",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G4 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R17",
+      "requirement": "Read-only MCP tools, snapshot lifecycle and real stdio behavior",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R17",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G5 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R18",
+      "requirement": "Honest compatibility and unsupported-data reporting",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R18",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G2,G3,G6 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R19",
+      "requirement": "Independent oracles, reproducible evidence and gate invalidation",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R19",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G0,G3,G7 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "G-R20",
+      "requirement": "Reproducible packaging, privacy audit and final handoff",
+      "source": {
+        "id": "G-spec",
+        "pointer": "R20",
+        "sha256": "fbe3928bd8fa4c5fce05a39225c33cd900ac380474cf7d35eb9687bcd8cf5c96"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / core product",
+      "dependencies": [],
+      "acceptance_test": "Run G1,G7 acceptance checks against independent oracle and final package.",
+      "evidence_required": "Gate receipt with candidate hash, per-check result, stdout/stderr and source-linked assertions.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-01",
+      "requirement": "One-call single-snapshot dossier includes supported materialized and referenced pawn scopes and domain metadata.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-01",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H1",
+        "H4",
+        "H5"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H1, H4, H5.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-02",
+      "requirement": "Normal one-call timeline automatically refreshes configured sources then examines every compatible snapshot in a pinned generation; freshness mode/window and every candidate outcome are explicit.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-02",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H2",
+        "H4",
+        "H5"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H2, H4, H5.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-03",
+      "requirement": "Separate campaign, pawn and event identity; no merges by names, paths, filenames or mtime alone.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-03",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H2",
+        "H3"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H2, H3.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-04",
+      "requirement": "Distinguish absolute, game-relative, biological and wall-clock fields; preserve unknown times and normalization provenance.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-04",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H0",
+        "H3",
+        "H7"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H0, H3, H7.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-05",
+      "requirement": "Separate recorded events, observations, differences and inferences; missing records never prove death.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-05",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H3",
+        "H5",
+        "H7"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H3, H5, H7.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-06",
+      "requirement": "No automatic save ancestry; equal-tick conflicts, event conflicts and asserted branches remain explicit.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-06",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H2",
+        "H3",
+        "H7"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H2, H3, H7.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-07",
+      "requirement": "All semantic claims resolve to exact snapshot hashes, canonical XML paths, raw values and interpretation rules.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-07",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H1",
+        "H3",
+        "H5"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H1, H3, H5.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-08",
+      "requirement": "Context includes historical aliases, related people, holder chains, maps, factions, roles, mods/research and directly linked events/art.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-08",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H1",
+        "H3",
+        "H5"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H1, H3, H5.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-09",
+      "requirement": "Unknown/custom pawn fields remain inspectable lossless evidence with explicit unknown semantics and coverage.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-09",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H1",
+        "H4"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H1, H4.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-10",
+      "requirement": "Read-only sources, secure bounded parsing, safe cancellation, atomic index generations and strict configured-source authority.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-10",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H1",
+        "H2",
+        "H4",
+        "H7"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H1, H2, H4, H7.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-11",
+      "requirement": "Python, JSON CLI and read-only MCP use equivalent shared services; existing v1 contracts remain intact.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-11",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H4",
+        "H6"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H4, H6.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-12",
+      "requirement": "H0-pinned private corpus and pawn cohort receive every distinct supported semantic fact in losslessly factored one-call context; caps are calibrated within 16MiB without dropping facts, and oversized results never silently truncate.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-12",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H0",
+        "H4",
+        "H5",
+        "H6"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H0, H4, H5, H6.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-13",
+      "requirement": "Independent oracles precede implementation; failed attempts retained; fresh reviewer tests final packaged candidate.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-13",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H0",
+        "H7"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H0, H7.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "HIS-14",
+      "requirement": "No private save-derived content in public source/history/distributions; no publication or host registration inferred from development.",
+      "source": {
+        "id": "H-requirements",
+        "pointer": "HIS-14",
+        "sha256": "7446dc9b249771e61d4c6757d4fb0f2f3cfd525165534fe29d8b2dd760caed2a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Luna history source + Sol history/catalog integration",
+      "dependencies": [
+        "H6",
+        "H7"
+      ],
+      "acceptance_test": "Execute independent acceptance checks for H6, H7.",
+      "evidence_required": "Hash-bound H gate receipt, source evidence IDs, coverage and retained failures.",
+      "status": "pending"
+    },
+    {
+      "id": "L-01",
+      "requirement": "Strict versioned JSONL envelope, identity, clocks, provenance, conflicts and unknown event retention",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a73",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L0,L1,L3 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-02",
+      "requirement": "Required control records and pawn baseline with per-domain coverage",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a74",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L0,L2,L5 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-03",
+      "requirement": "All required event families and truthful success predicates; no inferred intent or damage cause",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a74",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L0,L2,L5 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-04",
+      "requirement": "Every event family independently reports hook/version/status/limitations",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a74",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L2,L5 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-05",
+      "requirement": "Session lifecycle, checkpoint association, replay branches and install/remove gaps",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a75",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L0,L2,L5 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-06",
+      "requirement": "Observed/written/durable watermarks; only verified successful outputs establish parent checkpoint",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a75",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L1,L2,L5 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-07",
+      "requirement": "Bounded queue, serialized size, storage, rotation, gaps, failure isolation and shutdown limits",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a76",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L0,L1,L5,L6 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-08",
+      "requirement": "Bounded reader validates all sources, distinguishes malformed/interior/final-tail failures, cancels safely",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a76",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L0,L3,L4 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-09",
+      "requirement": "Python/CLI/MCP journal APIs preserve coverage and separate recorded history from save observations",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a77",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L3,L4 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-10",
+      "requirement": "Native game lifecycle acceptance in isolated profile; compilation alone is not pass",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a78",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L2,L5,L7 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-11",
+      "requirement": "Matched logger overhead and memory/queue limits use specified reproducible workload",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a78",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L6,L7 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "L-12",
+      "requirement": "Private save/game data excluded from public source and package; originals remain unchanged",
+      "source": {
+        "id": "L-spec",
+        "pointer": "\u00a71, \u00a78",
+        "sha256": "58534da2633aa0e921600b6d23b70e3e4485c7ba3a3193bb5c919881b1ce8b3c"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "Luna recorder owner + root integration",
+      "dependencies": [],
+      "acceptance_test": "Verify L4-L7 with the named synthetic/native gate.",
+      "evidence_required": "L gate receipts, source hashes, screenshots where native, and fault/overhead logs.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "A0",
+      "requirement": "Reconcile source scope, freeze independent public/private gold, corpus/cohort and thresholds before evaluation",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A0",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / oracle owner",
+      "dependencies": [
+        "all applicable G/H/L foundations"
+      ],
+      "acceptance_test": "Run A0 only after its prerequisites; aggregate rejects skips, stale evidence and candidate mismatch.",
+      "evidence_required": "Signed/hash-bound A gate receipt and retained raw failed and passing runs.",
+      "status": "pending"
+    },
+    {
+      "id": "A1",
+      "requirement": "Prove complete supported evidence extraction including holders, related records and absent/invalid/derived distinctions",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A1",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root + domain owners",
+      "dependencies": [
+        "all applicable G/H/L foundations"
+      ],
+      "acceptance_test": "Run A1 only after its prerequisites; aggregate rejects skips, stale evidence and candidate mismatch.",
+      "evidence_required": "Signed/hash-bound A gate receipt and retained raw failed and passing runs.",
+      "status": "pending"
+    },
+    {
+      "id": "A2",
+      "requirement": "Prove identity, chronology, branching, conflicts, deduplication and missing-data abstention",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A2",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root + history owners",
+      "dependencies": [
+        "all applicable G/H/L foundations"
+      ],
+      "acceptance_test": "Run A2 only after its prerequisites; aggregate rejects skips, stale evidence and candidate mismatch.",
+      "evidence_required": "Signed/hash-bound A gate receipt and retained raw failed and passing runs.",
+      "status": "pending"
+    },
+    {
+      "id": "A3",
+      "requirement": "Prove recorder collectors, checkpoints, durability, lifecycle gaps and bounded faults",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A3",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "recorder owner + root",
+      "dependencies": [
+        "all applicable G/H/L foundations"
+      ],
+      "acceptance_test": "Run A3 only after its prerequisites; aggregate rejects skips, stale evidence and candidate mismatch.",
+      "evidence_required": "Signed/hash-bound A gate receipt and retained raw failed and passing runs.",
+      "status": "pending"
+    },
+    {
+      "id": "A4",
+      "requirement": "Prove Python/CLI/MCP equivalence, one-call behavior, configured paths, cancellation and cross-language journal integration",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A4",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root + interface owners",
+      "dependencies": [
+        "all applicable G/H/L foundations"
+      ],
+      "acceptance_test": "Run A4 only after its prerequisites; aggregate rejects skips, stale evidence and candidate mismatch.",
+      "evidence_required": "Signed/hash-bound A gate receipt and retained raw failed and passing runs.",
+      "status": "pending"
+    },
+    {
+      "id": "A5",
+      "requirement": "Cold-reader first-pass discovery with broad questions and separately scored recall, precision, citation support, abstention, calls, bytes and time",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A5",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / independent evaluator",
+      "dependencies": [
+        "all applicable G/H/L foundations"
+      ],
+      "acceptance_test": "Run A5 only after its prerequisites; aggregate rejects skips, stale evidence and candidate mismatch.",
+      "evidence_required": "Signed/hash-bound A gate receipt and retained raw failed and passing runs.",
+      "status": "pending"
+    },
+    {
+      "id": "A6",
+      "requirement": "Preserve original thresholds; test faults and ranker versus deterministic baseline, low-ranked gold and no-pruning fallback",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A6",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / benchmark owner",
+      "dependencies": [
+        "all applicable G/H/L foundations"
+      ],
+      "acceptance_test": "Run A6 only after its prerequisites; aggregate rejects skips, stale evidence and candidate mismatch.",
+      "evidence_required": "Signed/hash-bound A gate receipt and retained raw failed and passing runs.",
+      "status": "pending"
+    },
+    {
+      "id": "A7",
+      "requirement": "Fresh independent review against final package; every mandatory requirement has valid evidence",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A7",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "independent reviewer",
+      "dependencies": [
+        "all applicable G/H/L foundations"
+      ],
+      "acceptance_test": "Run A7 only after its prerequisites; aggregate rejects skips, stale evidence and candidate mismatch.",
+      "evidence_required": "Signed/hash-bound A gate receipt and retained raw failed and passing runs.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-01",
+      "requirement": "Keep deterministic offline facts authoritative; semantic triage is an optional annotation layer",
+      "source": {
+        "id": "research-packet",
+        "pointer": "Read this first",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "root",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "offline deterministic path plus explicitly unrun real-provider label",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "DISC-02",
+      "requirement": "Join entity and episode context deterministically before ranking or narrative review",
+      "source": {
+        "id": "research-packet",
+        "pointer": "Proposed minimal pipeline, step 1",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "history/catalog owners",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "fixture joins compared with independent entity/event oracle",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-03",
+      "requirement": "Retain source-channel identity: save observation, recorded event, observed difference, inference, player-authored note and linked artifact",
+      "source": {
+        "id": "A-goal",
+        "pointer": "Required product scope; source-channel separation",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "history + recorder owners",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "mixed-source fixture proves channel and origin separation",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-04",
+      "requirement": "Show compact readable coverage at first contact and detailed coverage by reference without dropping completeness",
+      "source": {
+        "id": "research-packet",
+        "pointer": "P3",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / interface owner",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "measured representative response with all source/case outcomes",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-05",
+      "requirement": "Every claim has evidence IDs that resolve and semantically support it; retain opposing evidence and rejected claims",
+      "source": {
+        "id": "research-packet",
+        "pointer": "P2; claim checking",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / evaluator",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "independent support and contradiction adjudication; citation existence alone fails",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-06",
+      "requirement": "Present distinct participant perspectives without assigning unsupported motives, consent or objective cause",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A5; multiple perspectives",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / evaluator",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "two-perspective case with 100% support and zero motive/causality violations",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-07",
+      "requirement": "Keep biological age, game ticks/calendar, absolute tick and observation/wall clocks distinct with provenance",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A2; clocks",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "history/catalog owners",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "exact raw values plus independent clock conversions and uncertainty",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-08",
+      "requirement": "Separate explicit causal source from inferred association; association never silently becomes cause",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A2; explicit versus inferred cause",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "history + recorder owners",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "causal negative controls; zero unsupported causality claims",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-09",
+      "requirement": "Maintain an evidence-use ledger for included, excluded, queried, unresolved and failed evidence",
+      "source": {
+        "id": "A-goal",
+        "pointer": "Requirement register paragraph; evidence-use ledger",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / evaluator",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "reconcile every discovered source and case outcome; no mandatory skip",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-10",
+      "requirement": "Report selected-save population and every candidate outcome; unmatched/failed saves stay visible",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A5; save-selection coverage",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "Sol catalog owner",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "manifest completeness oracle over private and synthetic catalogs",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-11",
+      "requirement": "Resolve links to historical tales/messages/logs/art with exact source hashes and unsupported semantics preserved",
+      "source": {
+        "id": "A-goal",
+        "pointer": "Required product scope; linked historical artifacts",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "history/catalog owners",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "evidence retrieval test checks linked artifact provenance and privacy boundary",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-12",
+      "requirement": "Bound skeptic follow-ups and require each follow-up to target a named uncertainty/source",
+      "source": {
+        "id": "research-packet",
+        "pointer": "Proposed minimal pipeline, step 3; A5",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / evaluator",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "synthetic max-count and relevance oracle; no open-ended loop",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-13",
+      "requirement": "Invalidate or qualify derived annotations when save/catalog generation, source channel, resolver, rubric, model or prompt changes",
+      "source": {
+        "id": "research-packet",
+        "pointer": "Memory summaries; Cache keys",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / semantic adapter owner",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "cache mutation matrix proves no stale annotation reused",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-14",
+      "requirement": "Keep negative controls for unsupported claims, wrong pawn/branch, stale facts, hidden coverage gaps and low-ranked gold",
+      "source": {
+        "id": "research-packet",
+        "pointer": "P4; Suggested independent challenge set",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "oracle owner",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "all negative-control outcomes explicitly scored",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-15",
+      "requirement": "No-pruning fallback retrieves all gold evidence and ranker evaluation includes low-ranked gold cases",
+      "source": {
+        "id": "A-goal",
+        "pointer": "A6",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / benchmark owner",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "100% gold retrieval in fallback; every rank-stratum scored",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "DISC-16",
+      "requirement": "Prepare and test optional semantic adapter locally/offline; report real paid/private inference as unrun until separately authorized",
+      "source": {
+        "id": "A-goal",
+        "pointer": "Required product scope; optional semantic-triage extension",
+        "sha256": "e88224dd5eee5cb0c226541f5ae437a47813aaa189f06d5ec98d64052efcdb8a"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required delivery; users may omit installation or disable optional annotation",
+      "owner": "root / semantic adapter owner",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "offline interface/schema/cache/error tests; no mock counted as quality result",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending",
+      "optional_product_component": true
+    },
+    {
+      "id": "REC-P1",
+      "requirement": "Cold-reader first-pass discovery benchmark with unknown pawn/field/save identity",
+      "source": {
+        "id": "research-packet",
+        "pointer": "P1 \u2014 Add a cold-reader discovery benchmark",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / evaluator",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "A5 held-out benchmark and separate metrics",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "REC-P2",
+      "requirement": "Claim/evidence/counterevidence records with uncertainty and discriminating next query",
+      "source": {
+        "id": "research-packet",
+        "pointer": "P2 \u2014 Add claim/evidence and counterevidence records",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / evaluator",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "A5 citations semantically judged with counterevidence",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "REC-P3",
+      "requirement": "Compact readable coverage summary while preserving full machine-readable manifest",
+      "source": {
+        "id": "research-packet",
+        "pointer": "P3 \u2014 Make source coverage readable at first contact",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "root / interface owner",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "response byte accounting and full source outcome reconciliation",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "REC-P4",
+      "requirement": "Offline synthetic pilot first; stratify rare/unknown/contradiction cases, inspect low-ranked gold, freeze thresholds before private holdout",
+      "source": {
+        "id": "research-packet",
+        "pointer": "P4 \u2014 Run an offline synthetic pilot",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "oracle owner + root",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "public oracle receipt before sealed private manifest; A5/A6",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "REC-P5",
+      "requirement": "Treat forward recorder observations as separate channel and abstain for pre-installation periods",
+      "source": {
+        "id": "research-packet",
+        "pointer": "P5 \u2014 Treat forward recorder data as a new evidence channel",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "mandatory",
+      "scope_role": "required",
+      "owner": "recorder + history owners",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "synthetic install/removal/gap case plus native L5 if available",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "EXP-01",
+      "requirement": "Whole-colony generated biography beyond evidence-backed first-pass summaries",
+      "source": {
+        "id": "research-packet",
+        "pointer": "Read this first; not the product opportunity",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "exploratory",
+      "scope_role": "required",
+      "owner": "root",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "No automatic implementation; record as deferred scope",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "EXP-02",
+      "requirement": "Relevance/recency/salience ranking beyond deterministic baseline",
+      "source": {
+        "id": "research-packet",
+        "pointer": "External context \u00a73",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "exploratory",
+      "scope_role": "required",
+      "owner": "root",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "No ranking thresholds inferred from external studies; benchmark before adoption",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "EXP-03",
+      "requirement": "General graph UI and visual timeline",
+      "source": {
+        "id": "H-spec",
+        "pointer": "\u00a72 non-goals",
+        "sha256": "3a3823717926d64d7ac01040b73cc5bf50738af2f6e7236a7639fd760c68ad29"
+      },
+      "disposition": "exploratory",
+      "scope_role": "required",
+      "owner": "root",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "Deferred; correct JSON evidence retrieval takes precedence",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    },
+    {
+      "id": "EXP-04",
+      "requirement": "New competitor survey, mod compatibility claims, or source-backed narrative quality claims",
+      "source": {
+        "id": "research-packet",
+        "pointer": "External context / remaining uncertainty",
+        "sha256": "73e7f4f2c148839135d9d8e7f10c86292d0cfeb2131c741c8407db9a0b42ba53"
+      },
+      "disposition": "exploratory",
+      "scope_role": "required",
+      "owner": "root",
+      "dependencies": [
+        "G0/H0/L0 oracle foundations"
+      ],
+      "acceptance_test": "Not established by bounded source review; separate research decision",
+      "evidence_required": "Source-linked fixture/evaluation receipt or explicit deferred disposition.",
+      "status": "pending"
+    }
+  ],
+  "summary": {
+    "requirement_count": 79,
+    "mandatory": 75,
+    "optional": 0,
+    "exploratory": 4,
+    "implemented_and_accepted": 0,
+    "product_evaluation_performed": false
+  },
+  "thresholds_ref": "docs/requirements/discovery-acceptance.json",
+  "notes": [
+    "Optional component means optional to the deterministic core; optional scoped deliverables remain in this authorized ultimate task.",
+    "Research recommendations retain explicit dispositions; exploratory rows do not trigger automatic implementation.",
+    "All implementation statuses remain pending until attached evidence is independently reproduced against a final candidate.",
+    "Root review: optional product installation does not waive mandatory L gates or offline adapter delivery. Prior title-field holdout is a known H0 regression and is rejected as unseen; retained privately. No discovery evaluation may begin until a new holdout is frozen."
+  ],
+  "optional_execution": {
+    "real_semantic_provider_inference": {
+      "disposition": "optional",
+      "status": "unrun",
+      "requires": "separate authorization for paid inference and private-data transmission",
+      "local_adapter_delivery": "mandatory; mocks cannot establish real-model quality"
+    }
+  },
+  "oracle_basis_commit": "3cb19ca090a2ccdef65bcfdcd66d5520a8d10bc9",
+  "candidate_commit": null
+}

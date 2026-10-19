@@ -16,7 +16,7 @@ from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from rimworld_save_inspector.mcp_server import create_server
-from rimworld_save_inspector import mcp_server
+from rimworld_save_inspector import __version__, mcp_server
 from rimworld_save_inspector.schemas import SUCCESS_SCHEMAS
 
 
@@ -149,7 +149,8 @@ def test_real_stdio_initialize_call_shutdown_has_protocol_only_stdout(tmp_path):
                 cwd=str(__import__("pathlib").Path(__file__).parents[2]))
             async with stdio_client(params) as (read_stream, write_stream):
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=8) as session:
-                    await session.initialize()
+                    initialized = await session.initialize()
+                    assert initialized.server_info.version == __version__
                     tools = await session.list_tools()
                     assert {tool.name for tool in tools.tools} == TOOL_NAMES
                     result = await session.call_tool("inspect_save", {})

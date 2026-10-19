@@ -1,0 +1,295 @@
+{
+  "contract": "history-source/1.0",
+  "status": "preimplementation-interface-freeze",
+  "author_thread": "01a14622-b914-7c81-b9ff-0e08d6436c93",
+  "policy_version": "v2026.09.26.1",
+  "authority": "2026-10-17-pawn-history-design.md and 2026-10-17-pawn-history-requirements.json",
+  "top_level_keys_exact": [
+    "snapshot_id",
+    "interpretation_id",
+    "metadata",
+    "pawns",
+    "events",
+    "context",
+    "evidence",
+    "coverage",
+    "diagnostics"
+  ],
+  "scalar_types": {
+    "snapshot_id": "lowercase 64-character SHA-256 of source bytes",
+    "interpretation_id": "stable opaque identifier for parser, extraction profile, and schema interpretation; independent of source path and wall time",
+    "record_id": "snapshot-scoped identifier; never used to join a pawn or event across saves",
+    "pawn_id": "validated saved pawn ID, with conservative prefix normalization recorded separately; null only for a candidate lacking a trustworthy ID",
+    "evidence_id": "lowercase 64-character SHA-256 of canonical JSON for a lossless parsed raw node",
+    "source_ref": "lowercase 64-character SHA-256 of canonical JSON array [snapshot_id, interpretation_id, canonical_xml_path]",
+    "canonical_xml_path": "/root[1]/child[1]/repeated[2], one-based sibling occurrence indices for each expanded XML tag name"
+  },
+  "field_status_vocabulary": [
+    "observed",
+    "derived",
+    "ambiguous",
+    "absent",
+    "explicit-null",
+    "unsupported",
+    "invalid"
+  ],
+  "domain_coverage_status_vocabulary": [
+    "complete",
+    "partial",
+    "absent",
+    "unsupported",
+    "invalid"
+  ],
+  "source_outcome_vocabulary": [
+    "parsed",
+    "failed",
+    "excluded",
+    "unavailable"
+  ],
+  "clock_vocabulary": [
+    "absolute_tick",
+    "game_tick",
+    "biological_duration",
+    "wall_clock",
+    "unknown"
+  ],
+  "time_status_vocabulary": [
+    "known",
+    "pre_arrival",
+    "future_contradiction",
+    "unknown",
+    "invalid"
+  ],
+  "event_kind_vocabulary": [
+    "tale",
+    "archive",
+    "play_log",
+    "battle_log",
+    "letter",
+    "art",
+    "unknown"
+  ],
+  "metadata": {
+    "required_keys": ["profile", "campaign_key", "clocks"],
+    "profile": {
+      "required_keys": ["schema_version", "parser_version", "extraction_version", "game_version", "support_status"],
+      "game_version": "observed raw game version or null",
+      "support_status_vocabulary": ["verified", "best_effort", "unsupported", "unknown"]
+    },
+    "campaign_key": {
+      "required_field_names_exact": [
+        "seedString",
+        "persistentRandomValue",
+        "initialMapSize",
+        "startingYear",
+        "gameStartAbsTick",
+        "startingTile"
+      ],
+      "field_type": "claim",
+      "identity_rule": "Hash only all six validated normalized claim.value fields in the listed order. If any field is missing, unsupported, invalid, or ambiguous, classify review-needed. Never hash raw values, source refs, paths, filenames, timestamps, or descriptive labels."
+    },
+    "clocks": {
+      "required_field_names_exact": ["ticksGame", "gameStartAbsTick", "startingYear", "ticksAbs"],
+      "field_type": "claim",
+      "ticksAbs_rule": "Only when ticksGame and gameStartAbsTick are validated integers: ticksAbs = ticksGame + gameStartAbsTick, status derived; otherwise value null with an explicit non-observed status."
+    }
+  },
+  "claim": {
+    "required_keys": [
+      "field",
+      "value",
+      "raw_value",
+      "status",
+      "unit",
+      "code",
+      "display_label",
+      "normalization_rule",
+      "time_observation",
+      "evidence_id",
+      "source_ref"
+    ],
+    "field": "Stable domain-local semantic path. Repeated/optional array occurrences include an explicit saved key or bracketed one-based occurrence index; no silent collapse of equal siblings.",
+    "value": "Normalized semantic JSON scalar or structured value. Unresolved ambiguity may hold explicitly labeled alternatives but never an arbitrary winner; absent or invalid values are null.",
+    "raw_value": "Exact parsed source value, including whitespace when material, or null when no raw field exists",
+    "status": "one field_status_vocabulary value; absent differs from an explicit empty collection and explicit-null",
+    "unit": "documented unit, for example ticks or count, or null",
+    "code": "raw definition/code when known, or null; never substitute an invented display label",
+    "display_label": "saved or independently validated label, or null",
+    "normalization_rule": "stable rule identifier or null; derived claims identify their premise fields",
+    "time_observation": "null for non-time fields; otherwise the shared time_observation object, including birth, ability-use, growth/vat/cryosleep and other time-bearing semantic claims",
+    "evidence_id": "content ID for the exact supporting field or inspected containing node; required for every semantic claim, including an anchored observed absence",
+    "source_ref": "exact source occurrence ID paired with evidence_id; required for every semantic claim",
+    "validation": "An absent claim requires evidence of an inspected containing node and must never be a fabricated default empty value. Unsupported or unexamined areas appear in coverage, not as unsourced claims. A derived claim carries premise_refs, each containing both IDs."
+  },
+  "time_observation": {
+    "required_keys": ["raw_value", "raw_field", "clock", "normalized_game_tick", "normalization_rule", "status", "evidence_id", "source_ref"],
+    "raw_value": "exact raw source scalar or null",
+    "raw_field": "exact saved field path relative to its containing record, not a guessed semantic label",
+    "clock": "one clock_vocabulary value, assigned only from a validated field definition",
+    "normalized_game_tick": "integer game-relative tick or null when unknown, invalid, a duration, or a wall clock",
+    "normalization_rule": "stable validated rule identifier, or null when semantics are unverified",
+    "status": "one time_status_vocabulary value; unknown values never sort as zero",
+    "evidence_id": "supporting raw node content ID",
+    "source_ref": "exact supporting occurrence ID paired with evidence_id"
+  },
+  "pawns": {
+    "item_required_keys": [
+      "pawn_id",
+      "record_id",
+      "source_path",
+      "scope",
+      "holder_chain",
+      "aliases",
+      "status",
+      "domains",
+      "evidence_refs"
+    ],
+    "materialization_status_vocabulary": ["materialized", "reference_only", "candidate_unverified"],
+    "scope_vocabulary": [
+      "map",
+      "world_alive",
+      "world_dead",
+      "world_mothballed",
+      "caravan",
+      "transport",
+      "cryptosleep",
+      "growth_vat",
+      "corpse",
+      "inventory",
+      "carry",
+      "held_other",
+      "reference_only",
+      "unknown"
+    ],
+    "holder_chain": "ordered outermost-to-innermost holder objects {kind,saved_id,source_path,evidence_id,source_ref}; never flatten nested ownership into a single scope string",
+    "aliases": "observed name or title claims with their own evidence and snapshot provenance; no latest-name overwrite",
+    "domains_required": [
+      "identity",
+      "status_and_interaction",
+      "location",
+      "age",
+      "backstory",
+      "traits",
+      "skills",
+      "health",
+      "genes",
+      "equipment",
+      "apparel",
+      "inventory",
+      "relationships",
+      "abilities",
+      "mechanitor",
+      "ideology",
+      "royalty",
+      "roles",
+      "ownership",
+      "work",
+      "needs",
+      "memories",
+      "records",
+      "events",
+      "unknown_fields"
+    ],
+    "domain_shape": "{status,claims:[claim,...],links:[link,...]}; every required domain key exists with explicit coverage status, including absent and unsupported",
+    "identity_status_rule": "Identity and status_and_interaction explicitly represent faction, guest, prisoner, slave, title and interaction settings with observed/absent/unsupported status; they are not relegated to unknown fields. Roles includes formal role and office claims; ideology and royalty have their own supported claims/coverage.",
+    "link_shape": "{kind,target_id,status,evidence_id,source_ref}; parent direction, relationship role, and unresolved reference status remain explicit",
+    "evidence_refs": "list of {evidence_id,source_ref} for the materialized pawn body or reference-only occurrence"
+  },
+  "events": {
+    "item_required_keys": [
+      "kind",
+      "saved_event_id",
+      "raw_saved_id",
+      "record_id",
+      "participants",
+      "occurrence",
+      "claims",
+      "evidence_refs"
+    ],
+    "saved_event_id": "kind and validated class namespace plus saved ID where namespaces can collide, for example tale:<validatedTaleClass>:Tale_1, archive:<validatedClassNamespace>:<rawID>, play_log:<validatedLogClass>:<rawID>; null when no stable saved ID is supported. An unresolved class collision remains separate, not silently deduplicated.",
+    "raw_saved_id": "exact saved ID text or null; not a guessed integer extracted from narrative text",
+    "participants": "list of {pawn_id,role,status,evidence_id,source_ref}; unsupported actor/victim semantics remain unknown rather than inferred from names or substring matches",
+    "occurrence": "shared time_observation object; null only when no occurrence field exists, in which case no dated recorded_event is asserted",
+    "claims": "all supported event-specific claims, retaining payload variants and raw IDs",
+    "evidence_refs": "list of exact {evidence_id,source_ref} source occurrences",
+    "archive_rule": "Archive entries are read from /savegame/game/history/archive/archivables/li with uppercase ID fields when validated. Active letterStack Letter_ references are reference-only unless the exact class inheritance and body semantics are verified; broad integer or name matches do not materialize letters. Preserve unresolved raw-ID namespace collisions.",
+    "time_rule": "Do not normalize an archive time field or infer an event occurrence until its game-method semantics have been verified. Preserve raw_value/raw_field and set clock/status unknown otherwise."
+  },
+  "context": {
+    "required_keys": ["maps", "factions", "mods", "research", "scenario", "art", "related_entities"],
+    "collection_rule": "Each list holds shared snapshot-level entities once, each as {id,kind,claims,links,evidence_refs}. Related people carry concise identity/status, without recursive biographies. Lists can be empty only when explicitly observed empty; missing extraction is represented in coverage.",
+    "reference_rule": "Resolve exact saved IDs within the snapshot first. Cross-save aliases may be added by the catalog only with their source/time and fallback label."
+  },
+  "evidence": {
+    "item_required_keys": ["evidence_id", "source_ref", "snapshot_id", "interpretation_id", "path", "node"],
+    "node_shape": "{tag,attributes:[[name,value],...],text,children:[{node,tail},...]}; attributes and child/tail order preserved exactly, including repeated children and mixed text",
+    "canonical_hash_rule": "UTF-8 SHA-256 of deterministic JSON serialization of node with sorted object keys, no extra whitespace and unescaped Unicode; ordered arrays remain ordered. Content ID excludes source path and snapshot identity.",
+    "source_ref_hash_rule": "UTF-8 SHA-256 of deterministic JSON serialization of [snapshot_id,interpretation_id,path]; a repeated content node at another path has the same evidence_id but a distinct source_ref.",
+    "retrieval_rule": "Catalog persists the lossless node and every occurrence. Retrieval of a generation-bound evidence ID reconstructs node, path, origin snapshot and rule without reopening original saves."
+  },
+  "coverage": {
+    "required_keys": ["source_status", "domains", "unknown_fields", "limits"],
+    "domains": "map from every required pawn domain and event/context domain to {status,observed_count,unknown_count}; no unexamined area is called complete",
+    "unknown_fields": "list of {path,structural_kind,serialized_bytes,evidence_id,source_ref}; raw-only means no invented semantic claim",
+    "limits": "effective source-size, XML-depth, logical-record, retained-working-value and deadline limits, with explicit failure rather than truncated success"
+  },
+  "diagnostics": {
+    "item_shape": "{code,severity,message,path,evidence_id,source_ref,details}; missing evidence IDs allowed only when no source occurrence exists"
+  },
+  "catalog_and_response_factoring": {
+    "namespace_rule": "Registry stores a stable namespace UUID; generation/catalog ID is SHA-256 of canonical logical manifest and interpretation versions, including source hashes/outcomes and collection policy, excluding indexed-at/check wall times and database row order.",
+    "fact_dictionary_key": "SHA-256 of canonical JSON [domain,field,status,value,unit,code,display_label,normalization_rule]; exclude evidence/provenance IDs, raw_value, and observation time. Preserve every differing raw_value and evidence occurrence in memberships.",
+    "memberships": "Every materialized snapshot/pawn/record/claim occurrence maps to one fact ID plus raw_value, source_ref, evidence_id and optional-array key/index. This inverse mapping reconstructs all supported semantic observations per snapshot exactly.",
+    "runs": "Optional compact membership encoding may group repeated facts over explicit snapshot-ID lists or lossless indexes. It must preserve gaps, same-tick alternatives, raw-value/evidence variants and original per-snapshot membership; a run never certifies ancestry.",
+    "transport": "Logical HistorySnapshot.as_dict() is expanded. SQLite and detail=context JSON may use documented dictionaries and runs only when inverse reconstruction is exact. detail=full expands every retained semantic observation and difference; it may share metadata/evidence references but must not collapse observations into context-style runs. An oversized full result returns RESULT_TOO_LARGE with required bytes, never truncated success. Count actual encoded CLI/MCP response bytes, including any MCP structured/text duplication, against the 16 MiB absolute response ceiling."
+  },
+  "chronology_examples": [
+    {
+      "case": "pre_arrival_absolute_tale",
+      "snapshot_ticksGame": 730,
+      "gameStartAbsTick": 52500,
+      "raw_field": "occurred",
+      "raw_value": "52490",
+      "clock": "absolute_tick",
+      "normalized_game_tick": -10,
+      "status": "pre_arrival",
+      "rule": "integer(raw_value)-gameStartAbsTick"
+    },
+    {
+      "case": "future_contradiction",
+      "snapshot_ticksGame": 900,
+      "gameStartAbsTick": 52500,
+      "raw_field": "occurred",
+      "raw_value": "53450",
+      "clock": "absolute_tick",
+      "normalized_game_tick": 950,
+      "status": "future_contradiction",
+      "rule": "normalized tick exceeds supporting snapshot ticksGame=900"
+    },
+    {
+      "case": "biological_duration",
+      "raw_field": "biologicalAgeTicks",
+      "raw_value": "900",
+      "clock": "biological_duration",
+      "normalized_game_tick": null,
+      "status": "unknown",
+      "rule": "duration is not an event timestamp"
+    },
+    {
+      "case": "unverified_archive_time",
+      "raw_field": "archive/rawTime",
+      "raw_value": "12345",
+      "clock": "unknown",
+      "normalized_game_tick": null,
+      "status": "unknown",
+      "rule": "no normalization without validated game-method semantics"
+    },
+    {
+      "case": "same_tick_alternatives",
+      "snapshot_ids": ["distinct-sha-A", "distinct-sha-B"],
+      "snapshot_ticksGame": 900,
+      "lineage_status": "unproven",
+      "rule": "preserve both state observations and label branch alternatives; do not select a current winner"
+    }
+  ]
+}

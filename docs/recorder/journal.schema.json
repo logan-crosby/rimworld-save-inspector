@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rimworld-save-inspector.local/schemas/journal-1.0.json",
+  "title": "Life Recorder journal read result 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["journal_schema_version", "sources", "subject", "sessions", "events", "conflicts", "coverage", "provenance"],
+  "properties": {
+    "journal_schema_version": {"const": "1.0"},
+    "sources": {"type": "array", "items": {"type": "object"}},
+    "subject": {"type": "object"},
+    "sessions": {"type": "array", "items": {"type": "object"}},
+    "events": {"type": "array", "items": {"type": "object"}},
+    "conflicts": {"type": "array", "items": {"type": "object"}},
+    "coverage": {"type": "object"},
+    "provenance": {"type": "object"}
+  }
+}

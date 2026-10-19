@@ -2,14 +2,19 @@
 
 RimWorld Save Inspector reads a local RimWorld XML save and returns bounded, structured JSON. The same query contract is available through Python, the `rim-save` command, and an optional read-only MCP stdio server. It does not modify saves or contact a remote service. See the [normative contract](docs/design.md) for field definitions and serialized-data rules.
 
+**1.1.0b1** is a beta adding cross-save histories
+and offline discovery to the 1.0 inspection interface. The optional logging mod
+is excluded from the release. See the [feature and version policy](docs/rimworld-save-inspector/versioning.md)
+for compatibility, feature maturity and the remaining validation limits.
+
 ## Install
 
-Python 3.11 or newer is required. When the public GitHub v1.0.0 release is available, install its wheel or source archive directly:
+Python 3.11 or newer is required. Install the v1.1.0b1 beta wheel or source archive:
 
 ```sh
-python -m pip install "https://github.com/logan-crosby/rimworld-save-inspector/releases/download/v1.0.0/rimworld_save_inspector-1.0.0-py3-none-any.whl"
+python -m pip install "https://github.com/logan-crosby/rimworld-save-inspector/releases/download/v1.1.0b1/rimworld_save_inspector-1.1.0b1-py3-none-any.whl"
 # or
-python -m pip install "https://github.com/logan-crosby/rimworld-save-inspector/releases/download/v1.0.0/rimworld_save_inspector-1.0.0.tar.gz"
+python -m pip install "https://github.com/logan-crosby/rimworld-save-inspector/releases/download/v1.1.0b1/rimworld_save_inspector-1.1.0b1.tar.gz"
 ```
 
 The project can also be installed from a source checkout:
@@ -21,6 +26,19 @@ python -m pip install .
 # Optional MCP stdio server:
 python -m pip install '.[mcp]'
 ```
+
+For this beta checkout, build local artifacts with `uv build`, then install the
+wheel in a separate environment:
+
+```sh
+python -m pip install './dist/rimworld_save_inspector-1.1.0b1-py3-none-any.whl[mcp]'
+rim-save --version
+# rim-save 1.1.0b1
+```
+
+The stable [v1.0.0 release](https://github.com/logan-crosby/rimworld-save-inspector/releases/tag/v1.0.0)
+remains available without the new history and discovery commands. Verify downloaded
+artifacts against the release's `SHA256SUMS` file.
 
 The repository's locked development environment uses `uv sync --frozen --extra dev --extra mcp`. The MCP SDK is optional for CLI and Python users; install the `[mcp]` extra to run the server. The v1 release is distributed through GitHub; this project does not claim a PyPI package. The repository, release assets, and CI results should be checked at their public GitHub pages after publication; they are not established by this documentation alone.
 
@@ -41,6 +59,46 @@ rim-save inspect /path/to/colony.rws mods --limit 20
 ```
 
 Paged queries default to 50 results and allow limits from 1 to 200. Use the returned `page.next_cursor` with the same query, filters, and limit to request the next page. The `rim-save inspect SAVE QUERY --help` form documents query-specific options. `--include-source-path` opts into adding the local absolute path to provenance; it is omitted by default.
+
+## Cross-save histories and discovery (1.1 beta)
+
+Build a local catalog once, then query a pawn across its compatible saves in one
+call. The catalog retains source evidence and immutable generations.
+
+```sh
+rim-save catalog build /path/to/saves --output /path/to/history.sqlite
+rim-save discover /path/to/history.sqlite
+rim-save timeline /path/to/history.sqlite --pawn-id Human123
+rim-save dossier /path/to/history.sqlite --pawn-id Human123
+rim-save history-mcp --catalog /path/to/history.sqlite
+```
+
+See [history commands and contracts](docs/rimworld-save-inspector/history.md).
+Uncertain identity, missing clocks, conflicting observations and unsupported
+fields remain explicit. Discovery highlights are an entry point; use the full
+timeline and evidence queries for detail.
+
+## Experimental recorder and journal tools
+
+The source repository retains an experimental [C# recorder mod](recorder/README.md).
+The mod is excluded from the 1.1 beta wheel and source archive. Read-only journal
+inspection remains available as an experimental compatibility utility in the
+Python package. The [recorder specification](docs/superpowers/specs/2026-10-17-life-recorder-design.md)
+defines event metadata, clocks, session branches, failure coverage and acceptance gates.
+
+```sh
+rim-save journal /path/to/journals --pawn-id Human42
+rim-save journal-mcp --journal /path/to/journals
+```
+
+The dedicated journal MCP exposes `get_journal_overview`, `get_pawn_journal`, and `get_journal_schema`, with no preliminary inspect call. Each response keeps source outcomes, session ancestry, conflicts and recording gaps. Its source path is configured at startup; tool calls cannot choose arbitrary files. Event and response schemas are in [docs/recorder](docs/recorder).
+
+The recorder is deferred from the current delivery. Native holder-transition
+handling has unresolved failures; do not install it for dependable logging.
+Its source and failed attempts are preserved for future work. Journal readers
+remain available for explicitly supplied files, but cannot establish that the
+recorder collected a complete history. Existing saves remain inspectable without
+the recorder. See the [delivery scope](docs/rimworld-save-inspector/delivery-scope.md).
 
 ## Python API
 
@@ -73,11 +131,14 @@ To continue a page, pass `cursor=pawns_page["page"]["next_cursor"]` in a new `Qu
 Install the optional extra, then start a local stdio server bound to one save:
 
 ```sh
-python -m pip install 'rimworld-save-inspector[mcp]'
+python -m pip install '.[mcp]'
 rim-save mcp --save /path/to/colony.rws
 # Equivalent entry point:
 rim-save-mcp --save /path/to/colony.rws
 ```
+
+Cold MCP startup can take about 10–20 seconds on a busy host. Allow for startup
+in the client's connection timeout; this is separate from warm query execution.
 
 The server exposes ten read-only tools: `inspect_save`, `get_colony_summary`, `list_pawns`, `get_pawn`, `get_health`, `get_genes`, `get_equipment`, `get_inventory`, `get_research`, and `get_mods`. First call `inspect_save`; pass its `snapshot_id` to later calls. For apparel, call `get_equipment` with `holder: "apparel"`. Paged tools accept `limit` and `cursor`.
 
@@ -119,7 +180,7 @@ The script checks the Python API, CLI, paging, apparel selection, and an actual 
 
 ## Troubleshooting
 
-- `MCP_EXTRA_REQUIRED`: install `rimworld-save-inspector[mcp]` in the same environment that runs `rim-save`.
+- `MCP_EXTRA_REQUIRED`: reinstall the chosen wheel with its `[mcp]` extra, or run `python -m pip install '.[mcp]'` from the checkout in the environment that runs `rim-save`.
 - `SOURCE_CHANGED`: the file changed during a read. Wait for a stable copy, load a new snapshot, and restart the query.
 - `INVALID_CURSOR`: cursors belong to one snapshot, query, filter set, and page size. Start again at the first page with the same request options.
 - `SNAPSHOT_NOT_LOADED`: call `inspect_save` before another MCP tool.

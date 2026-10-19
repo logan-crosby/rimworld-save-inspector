@@ -33,12 +33,23 @@ jobs:
           env -u RWSI_PRIVATE_FIXTURE -u RWSI_PRIVATE_ORACLE
           -u RWSI_PRIVATE_SPEC -u RWSI_PRIVATE_ANCHOR -u RWSI_PRIVATE_ANCHOR_SHA256 -u PYTHONPATH
           uv run --frozen --extra dev --extra mcp python -m pytest -q
+          tests/unit
+          tests/reliability/test_input_boundaries.py
+          tests/integration/test_query_edge_cases.py
+          tests/discovery
           tests/contract
           tests/v1
           tests/packaging/test_v1_metadata.py
           tests/integration/test_json_contract_variants.py
           tests/integration/test_synthetic_domain_equivalence.py
-          tests/mcp/test_mcp_server.py
+          tests/mcp
+          tests/history_oracle
+          tests/history_source
+          tests/history_catalog
+          tests/history_interfaces
+          tests/journal
+          tests/discovery_oracle
+          tests/acceptance_aggregate
       - name: Build wheel and source archive
         run: uv build
       - name: Install and execute each artifact outside the checkout
@@ -67,3 +78,30 @@ jobs:
             )
             rm -rf "$env_dir"
           done
+
+  recorder-and-interop:
+    name: Recorder reference build and actual C# interoperability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
+      # Pinned from https://github.com/actions/setup-dotnet/releases/tag/v6.0.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '8.0.130'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11'
+      - run: uv sync --frozen --extra dev --extra mcp
+      - name: Execute core tests and pinned reference build
+        run: |
+          dotnet test recorder/Recorder.Tests/Recorder.Tests.csproj --logger 'trx;LogFileName=recorder.trx'
+          dotnet build recorder/Recorder.Mod/Recorder.Mod.csproj -p:RimWorldGameProfile=reference-1.6.4535
+      - name: Generate journal with production C# serializer
+        run: dotnet run --project recorder/Recorder.Sample/Recorder.Sample.csproj -- "$RUNNER_TEMP/actual-csharp.jsonl"
+      - name: Verify actual output through Python JSON CLI and readonly MCP
+        env:
+          RWSI_CSHARP_SAMPLE_PATH: ${{ runner.temp }}/actual-csharp.jsonl
+        run: uv run --frozen --extra dev --extra mcp python -m pytest -q tests/cross_language --junitxml=interop.xml
+      # Native/private acceptance runs locally or on separately authorized secure runners.
+      # A green public job never substitutes for tools.aggregate_acceptance's32 mandatory gates.

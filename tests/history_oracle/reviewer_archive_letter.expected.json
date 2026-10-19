@@ -1,0 +1,17 @@
+{
+  "archive_record_count": 6,
+  "archive_selector": "/savegame/game/history/archive/archivables/li",
+  "direct_pawn_id": "Human1",
+  "exact_target_pawn_ids": ["Human1", "Human2"],
+  "prose_only_id_must_not_link": "Human3",
+  "active_letter_refs": ["Letter_12", "Letter_7", "Letter_404"],
+  "active_resolution": {
+    "Letter_12": "StandardLetter#12",
+    "Letter_7": "ambiguous",
+    "Letter_404": "unresolved_or_custom"
+  },
+  "same_numeric_id_different_classes": ["StandardLetter#12", "Message#12"],
+  "clock_fields_raw_only_until_validated": ["arrivalTick", "startingTime", "startingTick"],
+  "reference_only_active_letters": true,
+  "unknown_class_requires_review": "CustomArchive#404"
+}

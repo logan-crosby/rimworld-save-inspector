@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>RWSI Native Acceptance Harness (Development Only)</name>
+  <author>RimWorld Save Inspector development harness</author>
+  <packageId>rwsi.nativeacceptance.development</packageId>
+  <supportedVersions>
+    <li>1.7</li>
+  </supportedVersions>
+  <modDependencies>
+    <li>
+      <packageId>brrainz.harmony</packageId>
+      <displayName>Harmony</displayName>
+    </li>
+  </modDependencies>
+  <description>Disposable-profile-only debug actions for native save-inspector acceptance. Do not include in release packages.</description>
+</ModMetaData>
