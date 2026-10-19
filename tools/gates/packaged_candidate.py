@@ -346,7 +346,7 @@ def audit_scanner_probe() -> dict[str, Any]:
         "../escape.txt": b"",
         "/absolute.txt": b"",
         "C:\\absolute.txt": b"",
-        "payload.txt": b"ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+        "payload.txt": b"ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",  # gitleaks:allow (synthetic test fixture, not a real token)
         "snippet.txt": b"<savegame><name>private-colony</name></savegame>",
         "docs/design.md": (ROOT / "docs/design.md").read_bytes(),
     })
